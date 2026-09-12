@@ -24,9 +24,30 @@
   --defense-dim:#1E4643;
   --defense-soft:rgba(79,209,197,.14);
   --warn:#FFB454;
+  --grid-line:rgba(255,255,255,.018);
   --font-display:'Rajdhani',sans-serif;
   --font-body:'Inter',sans-serif;
   --font-mono:'IBM Plex Mono',monospace;
+}
+
+[data-theme="light"]{
+  --bg:#F3F0E8;
+  --bg-raised:#FFFFFF;
+  --bg-card:#FFFFFF;
+  --bg-card-hover:#ECE6D8;
+  --border:#DED6C3;
+  --border-strong:#C2B8A2;
+  --text:#1B2733;
+  --text-dim:#57626C;
+  --text-faint:#828C96;
+  --accent:#E23A49;
+  --accent-dim:#B92E3B;
+  --accent-soft:rgba(226,58,73,.10);
+  --defense:#0E8F80;
+  --defense-dim:#0B6E63;
+  --defense-soft:rgba(14,143,128,.10);
+  --warn:#A66A0A;
+  --grid-line:rgba(27,39,51,.035);
 }
 
 *{box-sizing:border-box;}
@@ -40,8 +61,9 @@ body{
   line-height:1.5;
   background-image:
     linear-gradient(var(--bg),var(--bg)),
-    repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 42px),
-    repeating-linear-gradient(90deg, rgba(255,255,255,.018) 0 1px, transparent 1px 42px);
+    repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px 42px),
+    repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px 42px);
+  transition:background-color .15s ease, color .15s ease;
 }
 ::selection{background:var(--accent-soft); color:var(--text);}
 button{font:inherit;color:inherit;}
@@ -72,6 +94,10 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   padding:0 18px 18px;
   border-bottom:1px solid var(--border);
   margin-bottom:14px;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
 }
 .brand .kicker{
   font-family:var(--font-mono);
@@ -88,6 +114,20 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   letter-spacing:.02em;
   line-height:1.05;
 }
+.theme-toggle{
+  background:none;
+  border:1px solid var(--border-strong);
+  color:var(--text-dim);
+  width:30px;height:30px;flex:none;
+  border-radius:4px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  margin-top:1px;
+}
+.theme-toggle:hover{color:var(--text); background:var(--bg-card-hover); border-color:var(--accent-dim);}
+.theme-toggle .icon-moon{display:none;}
+[data-theme="light"] .theme-toggle .icon-sun{display:none;}
+[data-theme="light"] .theme-toggle .icon-moon{display:block;}
 
 .sidebar-section-label{
   font-family:var(--font-mono);
@@ -652,6 +692,15 @@ svg{display:block;}
   .map-hero h2{font-size:24px;}
 }
 </style>
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem('antiStratVault_theme');
+    if(!t){ t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark'; }
+    if(t === 'light'){ document.documentElement.setAttribute('data-theme','light'); }
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 
@@ -659,8 +708,14 @@ svg{display:block;}
 <div class="app">
   <aside class="sidebar">
     <div class="brand">
-      <span class="kicker">// COACH TOOLS</span>
-      <span class="title">Anti-Strat<br>Vault</span>
+      <div>
+        <span class="kicker">// COACH TOOLS</span>
+        <span class="title">Anti-Strat<br>Vault</span>
+      </div>
+      <button class="theme-toggle" id="themeToggle" title="Switch to light theme" aria-label="Switch to light theme">
+        <svg class="icon-sun" width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3.4" stroke="currentColor" stroke-width="1.4"/><path d="M8 .8v2M8 13.2v2M15.2 8h-2M2.8 8h-2M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4M13.1 13.1l-1.4-1.4M4.3 4.3L2.9 2.9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <svg class="icon-moon" width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M14 9.2A6 6 0 1 1 6.8 2a4.7 4.7 0 0 0 7.2 7.2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      </button>
     </div>
     <div class="sidebar-section-label">
       <span>ENEMY TEAMS</span>
@@ -1756,9 +1811,42 @@ function setupBackup(){
   });
 }
 
+/* ---------------- theme ---------------- */
+
+var THEME_KEY = 'antiStratVault_theme';
+
+function setupTheme(){
+  var btn = document.getElementById('themeToggle');
+  if (!btn) return;
+
+  function currentTheme(){
+    return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  }
+  function updateLabel(){
+    var isLight = currentTheme() === 'light';
+    var label = isLight ? 'Switch to dark theme' : 'Switch to light theme';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+  }
+
+  updateLabel();
+
+  btn.addEventListener('click', function(){
+    var next = currentTheme() === 'light' ? 'dark' : 'light';
+    if (next === 'light'){
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    try { localStorage.setItem(THEME_KEY, next); } catch(e){}
+    updateLabel();
+  });
+}
+
 /* ---------------- boot ---------------- */
 
 function boot(){
+  setupTheme();
   renderTopbar();
   renderWelcome();
 
