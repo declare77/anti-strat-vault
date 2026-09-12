@@ -154,9 +154,12 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 
 .add-team-row{
   padding:0 14px 10px;
+  display:flex;
+  gap:6px;
 }
 .add-team-row input{
-  width:100%;
+  flex:1;
+  min-width:0;
   background:var(--bg-card);
   border:1px solid var(--accent-dim);
   color:var(--text);
@@ -165,6 +168,18 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   font-size:13px;
 }
 .add-team-row input:focus{border-color:var(--accent);}
+.add-team-submit{
+  flex:none;
+  width:30px;
+  background:var(--accent);
+  border:1px solid var(--accent);
+  color:#0F1923;
+  border-radius:3px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+}
+.add-team-submit:hover{background:#ff5b68; border-color:#ff5b68;}
+.add-team-submit:disabled{opacity:.4; cursor:default; background:var(--accent); border-color:var(--accent);}
 
 .team-list{
   flex:1;
@@ -725,6 +740,9 @@ svg{display:block;}
     </div>
     <div id="addTeamRow" class="add-team-row" style="display:none;">
       <input id="addTeamInput" type="text" placeholder="Team name, e.g. Sentinels" maxlength="60">
+      <button id="addTeamSubmit" class="add-team-submit" title="Add team" aria-label="Add team" disabled>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.3 3.3L13 4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </div>
     <div class="team-list" id="teamList">
       <div class="empty-teams">Loading roster…</div>
@@ -1605,10 +1623,20 @@ function unsubscribeMapDetail(){
 
 function openAddTeam(){
   var row = document.getElementById('addTeamRow');
-  row.style.display = 'block';
+  row.style.display = 'flex';
   var input = document.getElementById('addTeamInput');
   input.value = '';
+  document.getElementById('addTeamSubmit').disabled = true;
   input.focus();
+}
+
+function submitAddTeam(){
+  var input = document.getElementById('addTeamInput');
+  var val = input.value.trim();
+  if (val){
+    backend.addTeam(val).then(function(id){ selectTeam(id); });
+  }
+  document.getElementById('addTeamRow').style.display = 'none';
 }
 
 /* ---------------- event wiring ---------------- */
@@ -1616,19 +1644,25 @@ function openAddTeam(){
 document.getElementById('addTeamBtn').addEventListener('click', openAddTeam);
 
 var addTeamInput = document.getElementById('addTeamInput');
+var addTeamSubmitBtn = document.getElementById('addTeamSubmit');
+
+addTeamInput.addEventListener('input', function(){
+  addTeamSubmitBtn.disabled = !addTeamInput.value.trim();
+});
 addTeamInput.addEventListener('keydown', function(e){
   if (e.key === 'Enter'){
-    var val = addTeamInput.value.trim();
-    if (val){
-      backend.addTeam(val).then(function(id){ selectTeam(id); });
-    }
-    document.getElementById('addTeamRow').style.display = 'none';
+    submitAddTeam();
   } else if (e.key === 'Escape'){
     document.getElementById('addTeamRow').style.display = 'none';
   }
 });
 addTeamInput.addEventListener('blur', function(){
   setTimeout(function(){ document.getElementById('addTeamRow').style.display = 'none'; }, 120);
+});
+// mousedown fires before the input's blur, so this still reads the current value
+addTeamSubmitBtn.addEventListener('mousedown', function(e){ e.preventDefault(); });
+addTeamSubmitBtn.addEventListener('click', function(){
+  submitAddTeam();
 });
 
 teamListEl.addEventListener('click', function(e){
