@@ -923,6 +923,9 @@ var AGENTS = [
   {id:'veto', name:'Veto'}, {id:'viper', name:'Viper'}, {id:'vyse', name:'Vyse'},
   {id:'waylay', name:'Waylay'}, {id:'yoru', name:'Yoru'}
 ];
+function agentImgSrc(id){
+  return 'Agents/' + id.charAt(0).toUpperCase() + id.slice(1) + '.png';
+}
 
 var CATEGORIES = [
   {key:'attackDefaults', label:'Attack Defaults', side:'attack', slotWord:'Default',
@@ -973,7 +976,7 @@ function buildDrawToolbarHTML(){
 function buildAgentTrayHTML(){
   var chips = AGENTS.map(function(a){
     return '<button type="button" class="agent-chip" data-agent="' + a.id + '" title="' + esc(a.name) + '" aria-label="Drag ' + esc(a.name) + ' onto the map">' +
-      '<img src="agents/' + a.id + '.png" alt="" draggable="false">' +
+      '<img src="' + agentImgSrc(a.id) + '" alt="" draggable="false">' +
     '</button>';
   }).join('');
   return '' +
@@ -1192,7 +1195,7 @@ function setupDrawing(root){
       el.style.left = (a.x*100) + '%';
       el.style.top = (a.y*100) + '%';
       el.innerHTML =
-        '<img src="agents/' + a.agent + '.png" alt="' + esc(meta.name) + '" draggable="false">' +
+        '<img src="' + agentImgSrc(a.agent) + '" alt="' + esc(meta.name) + '" draggable="false">' +
         '<button type="button" class="agent-marker-remove" aria-label="Remove ' + esc(meta.name) + '" title="Remove ' + esc(meta.name) + '">' +
           '<svg width="9" height="9" viewBox="0 0 10 10"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>' +
         '</button>';
@@ -1289,7 +1292,7 @@ function setupDrawing(root){
         ghostEl = document.createElement('div');
         ghostEl.className = 'agent-drag-ghost side-' + selectedSide;
         ghostEl.setAttribute('data-agent', agentId);
-        ghostEl.innerHTML = '<img src="agents/' + agentId + '.png" alt="">';
+        ghostEl.innerHTML = '<img src="' + agentImgSrc(agentId) + '" alt="">';
         ghostEl.style.left = e.clientX+'px';
         ghostEl.style.top = e.clientY+'px';
         document.body.appendChild(ghostEl);
