@@ -761,7 +761,7 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   border-radius:3px; overflow:hidden; border:1px solid var(--border);
   cursor:pointer; background:#EDEAE2; line-height:0;
 }
-.entry-image-thumb img{width:100%; height:auto; display:block; aspect-ratio:1/1; object-fit:cover;}
+.entry-image-thumb img, .entry-image-thumb canvas{width:100%; height:auto; display:block; aspect-ratio:1/1; object-fit:cover;}
 .entry-image-thumb:hover{border-color:var(--accent-dim);}
 .entry-image-remove{
   position:absolute; top:5px; right:5px; width:20px; height:20px;
@@ -847,7 +847,7 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   flex:1 1 220px; min-width:180px; max-width:280px;
   border:1px solid var(--border-strong); border-radius:4px; overflow:hidden; background:#EDEAE2; line-height:0;
 }
-.snap-preview-wrap img{width:100%; display:block;}
+.snap-preview-wrap img, .snap-preview-wrap canvas{width:100%; display:block;}
 .snap-modal-form{flex:1 1 260px; min-width:220px; display:flex; flex-direction:column; gap:12px;}
 .snap-field-label{
   font-family:var(--font-mono); font-size:10.5px; letter-spacing:.08em; color:var(--text-faint); display:block; margin-bottom:5px;
@@ -869,7 +869,7 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   flex:1 1 auto; min-width:0; display:flex; align-items:center; justify-content:center;
   background:#EDEAE2; border-radius:4px; box-shadow:0 20px 60px rgba(0,0,0,.5); overflow:hidden;
 }
-.strat-image-frame img{max-width:min(72vw,760px); max-height:88vh; display:block;}
+.strat-image-frame img, .strat-image-frame canvas{max-width:min(72vw,760px); max-height:88vh; display:block;}
 .strat-image-panel{
   flex:0 0 300px; max-width:300px; max-height:88vh; overflow-y:auto;
   background:var(--bg-raised); border:1px solid var(--border-strong); border-radius:4px;
@@ -933,7 +933,7 @@ svg{display:block;}
   .draw-thickness{order:10; width:100%;}
   .agent-tray-list{max-height:120px;}
   .strat-image-stage{flex-direction:column; max-width:94vw; max-height:none; overflow-y:auto;}
-  .strat-image-frame img{max-width:88vw; max-height:52vh;}
+  .strat-image-frame img, .strat-image-frame canvas{max-width:88vw; max-height:52vh;}
   .strat-image-panel{flex:none; max-width:none; max-height:none;}
   .snap-modal-body{flex-direction:column;}
   .snap-preview-wrap{max-width:none;}
@@ -1059,9 +1059,9 @@ function refreshAllAgentViews(){
 function agentImgSrc(id){
   return 'Agents/' + id.charAt(0).toUpperCase() + id.slice(1) + '.png';
 }
-// Small cache so a "Save as Image" snapshot doesn't re-fetch the same agent
-// icon over and over across markers/maps. Never rejects — a failed icon
-// load resolves to null so one bad image can't sink the whole snapshot.
+// Small cache so re-rendering a saved diagram doesn't re-fetch the same
+// agent icon over and over across strats/maps. Never rejects — a failed
+// icon load resolves to null so one bad image can't sink the whole render.
 var agentImageCache = {};
 function loadAgentImageEl(src){
   if (!agentImageCache[src]){
@@ -1073,6 +1073,64 @@ function loadAgentImageEl(src){
     });
   }
   return agentImageCache[src];
+}
+
+// Redraws a saved diagram (strokes + agent positions, from entry.snapshot)
+// onto a <canvas> at whatever size that canvas currently is — used for both
+// the small entry-card thumbnail and the big strat viewer. Vector data
+// means this always looks crisp, unlike a fixed-resolution PNG would.
+function renderSnapshotCanvas(canvas, snapshot, minimapSrc){
+  var img = new Image();
+  img.onload = function(){
+    var w = img.naturalWidth || 1024, h = img.naturalHeight || 1024;
+    canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+
+    (snapshot.strokes || []).forEach(function(stroke){
+      if (!stroke.points || stroke.points.length < 1) return;
+      ctx.globalCompositeOperation = stroke.mode === 'erase' ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = stroke.color || DRAW_COLORS[0];
+      ctx.lineWidth = Math.max(1, (stroke.width || 5) * (w / DRAW_REF_W));
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      stroke.points.forEach(function(p, i){
+        var x = p[0]*w, y = p[1]*h;
+        if (i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      });
+      if (stroke.points.length === 1){
+        var p0 = stroke.points[0];
+        ctx.lineTo(p0[0]*w + 0.01, p0[1]*h + 0.01);
+      }
+      ctx.stroke();
+    });
+    ctx.globalCompositeOperation = 'source-over';
+
+    var markers = snapshot.agents || [];
+    Promise.all(markers.map(function(a){ return loadAgentImageEl(agentImgSrc(a.agent)); })).then(function(icons){
+      var r = agentMarkerDiameter(w, false) / 2; // same formula as the live on-screen marker
+      markers.forEach(function(a, i){
+        var icon = icons[i];
+        var cx = a.x*w, cy = a.y*h;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.fillStyle = '#0F1923';
+        ctx.fillRect(cx-r, cy-r, r*2, r*2);
+        if (icon) ctx.drawImage(icon, cx-r, cy-r, r*2, r*2);
+        ctx.restore();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.lineWidth = Math.max(2, r*0.16);
+        ctx.strokeStyle = a.side === 'defense' ? '#0E8F80' : '#E23A49';
+        ctx.stroke();
+      });
+    });
+  };
+  img.src = minimapSrc;
 }
 
 var CATEGORIES = [
@@ -1517,82 +1575,25 @@ function setupDrawing(root){
     });
   }
 
-  /* ---------------- save current view as an image ---------------- */
-  // Renders the minimap image + every drawn stroke + every agent marker onto
-  // an offscreen canvas at the minimap's native resolution — independent of
-  // whatever size the panel happens to be on screen — so the saved photo
-  // looks sharp whether it was captured from a phone or a wide desktop.
-  function buildSnapshotDataUrl(){
-    var outW = img.naturalWidth || cssW || 1024;
-    var outH = img.naturalHeight || cssH || 1024;
-
-    var out = document.createElement('canvas');
-    out.width = outW; out.height = outH;
-    var octx = out.getContext('2d');
-    octx.drawImage(img, 0, 0, outW, outH);
-
-    strokes().forEach(function(stroke){
-      if (!stroke.points || stroke.points.length < 1) return;
-      octx.globalCompositeOperation = stroke.mode === 'erase' ? 'destination-out' : 'source-over';
-      octx.strokeStyle = stroke.color || DRAW_COLORS[0];
-      octx.lineWidth = Math.max(1, (stroke.width || 5) * (outW / DRAW_REF_W));
-      octx.lineCap = 'round';
-      octx.lineJoin = 'round';
-      octx.beginPath();
-      stroke.points.forEach(function(p, i){
-        var x = p[0]*outW, y = p[1]*outH;
-        if (i === 0) octx.moveTo(x,y); else octx.lineTo(x,y);
-      });
-      if (stroke.points.length === 1){
-        var p0 = stroke.points[0];
-        octx.lineTo(p0[0]*outW + 0.01, p0[1]*outH + 0.01);
-      }
-      octx.stroke();
-    });
-    octx.globalCompositeOperation = 'source-over';
-
-    var markers = agentsList();
-    return Promise.all(markers.map(function(a){ return loadAgentImageEl(agentImgSrc(a.agent)); }))
-      .then(function(icons){
-        var r = agentMarkerDiameter(outW, false) / 2; // same formula as the live on-screen marker
-        markers.forEach(function(a, i){
-          var icon = icons[i];
-          var cx = a.x*outW, cy = a.y*outH;
-          octx.save();
-          octx.beginPath();
-          octx.arc(cx, cy, r, 0, Math.PI*2);
-          octx.closePath();
-          octx.clip();
-          octx.fillStyle = '#0F1923';
-          octx.fillRect(cx-r, cy-r, r*2, r*2);
-          if (icon) octx.drawImage(icon, cx-r, cy-r, r*2, r*2);
-          octx.restore();
-          octx.beginPath();
-          octx.arc(cx, cy, r, 0, Math.PI*2);
-          octx.lineWidth = Math.max(2, r*0.16);
-          octx.strokeStyle = a.side === 'defense' ? '#0E8F80' : '#E23A49';
-          octx.stroke();
-        });
-        return out.toDataURL('image/png');
-      });
+  /* ---------------- save current view as a diagram ---------------- */
+  // Captures the map's CURRENT strokes + agent positions as plain vector
+  // data (a deep-cloned snapshot), not a rendered picture. Unlike a PNG
+  // this is a few hundred bytes regardless of complexity, so it syncs to
+  // shared players exactly like the rest of the strat book instead of
+  // being too big for Firestore — and renderSnapshotCanvas() redraws it
+  // crisp at whatever size it's shown, phone or desktop.
+  function captureSnapshot(){
+    return {
+      strokes: JSON.parse(JSON.stringify(strokes())),
+      agents: JSON.parse(JSON.stringify(agentsList()))
+    };
   }
 
   var snapshotBtn = root.querySelector('#mpSnapshotBtn');
   if (snapshotBtn){
     snapshotBtn.addEventListener('click', function(){
       if (snapshotBtn.disabled) return;
-      snapshotBtn.disabled = true;
-      var label = snapshotBtn.querySelector('span');
-      var prevLabel = label ? label.textContent : '';
-      if (label) label.textContent = 'CAPTURING…';
-      buildSnapshotDataUrl().then(function(dataUrl){
-        showAttachSnapshotModal(dataUrl);
-      }).catch(function(){
-        showModal({ title:'Couldn’t save the image', body:'Something went wrong capturing the map. Please try again.', confirmLabel:'OK', onConfirm:function(){} });
-      }).then(function(){
-        snapshotBtn.disabled = false;
-        if (label) label.textContent = prevLabel;
-      });
+      showAttachSnapshotModal(captureSnapshot());
     });
   }
 
@@ -1619,8 +1620,14 @@ function esc(s){
 }
 
 function genId(prefix){ return (prefix||'id') + '_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
-function makeEntry(){ return {id: genId('entry'), title:'', notes:'', image:null}; }
-function entryHasContent(e){ return !!((e.title && e.title.trim()) || (e.notes && e.notes.trim()) || e.image); }
+// `image` is a legacy rendered-PNG snapshot (pre-sharing feature) — kept
+// readable for old data but never created anymore and never synced to
+// Firestore (a rendered image is far too big). `snapshot` is its
+// replacement: the raw drawing strokes + agent positions at the moment the
+// coach saved them, tiny vector data that syncs fine and re-renders crisp
+// at any size via renderSnapshotCanvas().
+function makeEntry(){ return {id: genId('entry'), title:'', notes:'', image:null, snapshot:null}; }
+function entryHasContent(e){ return !!((e.title && e.title.trim()) || (e.notes && e.notes.trim()) || e.image || e.snapshot); }
 
 function emptyMapData(mapId){
   var categories = {};
@@ -1646,7 +1653,9 @@ function normalizeMapData(mapId, raw){
           id: (e && e.id) || genId('entry'),
           title: (e && e.title) || '',
           notes: (e && e.notes) || '',
-          image: (e && typeof e.image === 'string' && e.image) ? e.image : null
+          image: (e && typeof e.image === 'string' && e.image) ? e.image : null,
+          snapshot: (e && e.snapshot && Array.isArray(e.snapshot.strokes) && Array.isArray(e.snapshot.agents)) ?
+            { strokes: e.snapshot.strokes, agents: e.snapshot.agents } : null
         };
       });
     }
@@ -1857,28 +1866,50 @@ function pointsFromCloud(points){
     return Array.isArray(p) ? p : [p.x, p.y];
   });
 }
+function strokesToCloud(strokes){
+  return (strokes || []).map(function(s){
+    var s2 = Object.assign({}, s);
+    s2.points = pointsToCloud(s.points);
+    return s2;
+  });
+}
+function strokesFromCloud(strokes){
+  return (strokes || []).map(function(s){
+    var s2 = Object.assign({}, s);
+    s2.points = pointsFromCloud(s.points);
+    return s2;
+  });
+}
+// A strat's saved diagram (entry.snapshot) has the exact same nested-array
+// shape problem as the live drawing (entry.snapshot.strokes[].points), so
+// every entry across every category needs the same points conversion,
+// each direction, right alongside the live mapData.drawing.strokes.
 function cloneMapForCloud(mapPayload){
   var clone = JSON.parse(JSON.stringify(mapPayload));
   Object.keys(clone.categories || {}).forEach(function(catKey){
-    (clone.categories[catKey] || []).forEach(function(e){ e.image = null; });
+    (clone.categories[catKey] || []).forEach(function(e){
+      e.image = null; // legacy raster photo never syncs (too big for Firestore)
+      if (e.snapshot && Array.isArray(e.snapshot.strokes)){
+        e.snapshot = Object.assign({}, e.snapshot, { strokes: strokesToCloud(e.snapshot.strokes) });
+      }
+    });
   });
   if (clone.drawing && Array.isArray(clone.drawing.strokes)){
-    clone.drawing.strokes = clone.drawing.strokes.map(function(s){
-      var s2 = Object.assign({}, s);
-      s2.points = pointsToCloud(s.points);
-      return s2;
-    });
+    clone.drawing.strokes = strokesToCloud(clone.drawing.strokes);
   }
   return clone;
 }
 function cloneMapFromCloud(mapPayload){
   var clone = JSON.parse(JSON.stringify(mapPayload));
-  if (clone.drawing && Array.isArray(clone.drawing.strokes)){
-    clone.drawing.strokes = clone.drawing.strokes.map(function(s){
-      var s2 = Object.assign({}, s);
-      s2.points = pointsFromCloud(s.points);
-      return s2;
+  Object.keys(clone.categories || {}).forEach(function(catKey){
+    (clone.categories[catKey] || []).forEach(function(e){
+      if (e.snapshot && Array.isArray(e.snapshot.strokes)){
+        e.snapshot = Object.assign({}, e.snapshot, { strokes: strokesFromCloud(e.snapshot.strokes) });
+      }
     });
+  });
+  if (clone.drawing && Array.isArray(clone.drawing.strokes)){
+    clone.drawing.strokes = strokesFromCloud(clone.drawing.strokes);
   }
   return clone;
 }
@@ -2241,8 +2272,10 @@ function showShareModal(teamId){
 
 /* ---------------- snapshot → attach to a strat ---------------- */
 
-function showAttachSnapshotModal(dataUrl){
+function showAttachSnapshotModal(snap){
   if (!mapData) return;
+  var m = MAPS.find(function(x){ return x.id === mapData.mapId; });
+  if (!m) return;
   var root = document.getElementById('modalRoot');
 
   var catOptions = CATEGORIES.map(function(c){
@@ -2253,10 +2286,10 @@ function showAttachSnapshotModal(dataUrl){
   root.innerHTML =
     '<div class="modal-backdrop" id="snapModalBackdrop">' +
       '<div class="modal snap-modal">' +
-        '<h3>Save Map Snapshot</h3>' +
-        '<p>Pick which strat this picture belongs to. You can attach it to an existing strat or start a new one.</p>' +
+        '<h3>Save Diagram to Strat</h3>' +
+        '<p>Pick which strat this diagram belongs to. You can attach it to an existing strat or start a new one — it syncs live to shared players, same as everything else.</p>' +
         '<div class="snap-modal-body">' +
-          '<div class="snap-preview-wrap"><img src="' + dataUrl + '" alt="Captured map snapshot"></div>' +
+          '<div class="snap-preview-wrap"><canvas id="snapPreviewCanvas" aria-label="Captured map diagram"></canvas></div>' +
           '<div class="snap-modal-form">' +
             '<div>' +
               '<span class="snap-field-label">CATEGORY</span>' +
@@ -2266,7 +2299,7 @@ function showAttachSnapshotModal(dataUrl){
               '<span class="snap-field-label">STRAT</span>' +
               '<select id="snapEntrySelect"></select>' +
             '</div>' +
-            '<div class="snap-overwrite-warn" id="snapOverwriteWarn" hidden>This strat already has a photo — saving will replace it.</div>' +
+            '<div class="snap-overwrite-warn" id="snapOverwriteWarn" hidden>This strat already has a diagram — saving will replace it.</div>' +
           '</div>' +
         '</div>' +
         '<div class="modal-actions">' +
@@ -2275,6 +2308,8 @@ function showAttachSnapshotModal(dataUrl){
         '</div>' +
       '</div>' +
     '</div>';
+
+  renderSnapshotCanvas(document.getElementById('snapPreviewCanvas'), snap, m.minimap);
 
   var catSelect = document.getElementById('snapCatSelect');
   var entrySelect = document.getElementById('snapEntrySelect');
@@ -2286,7 +2321,7 @@ function showAttachSnapshotModal(dataUrl){
     var entries = (mapData.categories[catKey] || []);
     var opts = entries.map(function(e, idx){
       var label = (e.title && e.title.trim()) ? e.title.trim() : ('Slot ' + (idx+1) + ' (untitled)');
-      return '<option value="' + e.id + '">' + esc(label) + (e.image ? ' 📷' : '') + '</option>';
+      return '<option value="' + e.id + '">' + esc(label) + ((e.image || e.snapshot) ? ' 📷' : '') + '</option>';
     }).join('');
     opts += '<option value="__new__">+ New strat slot</option>';
     entrySelect.innerHTML = opts;
@@ -2297,7 +2332,7 @@ function showAttachSnapshotModal(dataUrl){
     var val = entrySelect.value;
     var entries = (mapData.categories[catKey] || []);
     var entry = entries.find(function(e){ return e.id === val; });
-    warnEl.hidden = !(entry && entry.image);
+    warnEl.hidden = !(entry && (entry.image || entry.snapshot));
   }
 
   populateEntries();
@@ -2323,7 +2358,8 @@ function showAttachSnapshotModal(dataUrl){
       entry = arr.find(function(e){ return e.id === val; });
     }
     if (entry){
-      entry.image = dataUrl;
+      entry.snapshot = snap;
+      entry.image = null; // a fresh save always replaces any old legacy raster photo
       scheduleSave();
       flushSave();
     }
@@ -2338,7 +2374,8 @@ function showStratImageModal(catKey, entryId){
   if (!mapData || !mapData.categories[catKey]) return;
   var cat = CATEGORIES.find(function(c){ return c.key === catKey; });
   var entry = mapData.categories[catKey].find(function(e){ return e.id === entryId; });
-  if (!cat || !entry || !entry.image) return;
+  if (!cat || !entry || !(entry.image || entry.snapshot)) return;
+  var m = MAPS.find(function(x){ return x.id === mapData.mapId; });
 
   var root = document.getElementById('modalRoot');
   root.innerHTML =
@@ -2347,15 +2384,22 @@ function showStratImageModal(catKey, entryId){
         '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 2l12 12M14 2L2 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>' +
       '</button>' +
       '<div class="strat-image-stage">' +
-        '<div class="strat-image-frame"><img src="' + entry.image + '" alt="' + esc(entry.title || cat.label) + ' snapshot"></div>' +
+        '<div class="strat-image-frame">' +
+          (entry.snapshot ? '<canvas id="stratImgCanvas" aria-label="' + esc(entry.title || cat.label) + ' diagram"></canvas>' :
+            '<img src="' + entry.image + '" alt="' + esc(entry.title || cat.label) + ' snapshot">') +
+        '</div>' +
         '<div class="strat-image-panel">' +
           '<span class="strat-image-catlabel"><span class="cat-side-mark ' + cat.side + '"></span> ' + esc(cat.label.toUpperCase()) + '</span>' +
           '<input type="text" class="entry-title strat-image-title" id="stratImgTitle" placeholder="Name this strat…" value="' + esc(entry.title) + '">' +
           '<textarea class="entry-notes strat-image-notes" id="stratImgNotes" placeholder="' + esc(cat.placeholder) + '">' + esc(entry.notes) + '</textarea>' +
-          '<button class="btn" id="stratImgRemove">Remove Photo</button>' +
+          '<button class="btn" id="stratImgRemove">Remove Diagram</button>' +
         '</div>' +
       '</div>' +
     '</div>';
+
+  if (entry.snapshot && m){
+    renderSnapshotCanvas(document.getElementById('stratImgCanvas'), entry.snapshot, m.minimap);
+  }
 
   function close(){
     root.innerHTML = '';
@@ -2378,6 +2422,7 @@ function showStratImageModal(catKey, entryId){
 
   document.getElementById('stratImgRemove').addEventListener('click', function(){
     entry.image = null;
+    entry.snapshot = null;
     scheduleSave();
     close();
   });
@@ -2505,9 +2550,9 @@ function renderMapDetail(){
     html += '<div class="minimap-panel">' +
       '<div class="mp-head"><span class="mp-label">MAP LAYOUT</span>' +
         '<div class="mp-head-actions">' +
-          '<button type="button" class="mp-snapshot" id="mpSnapshotBtn" title="Save the drawing and agents on the map as an image, tied to a strat" aria-label="Save map as image">' +
+          '<button type="button" class="mp-snapshot" id="mpSnapshotBtn" title="Save the drawing and agents on the map as a diagram, tied to a strat" aria-label="Save map as diagram">' +
             '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8.5" r="2.3" stroke="currentColor" stroke-width="1.3"/><path d="M6 4l.8-1.5h2.4L10 4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>' +
-            '<span>SAVE AS IMAGE</span>' +
+            '<span>SAVE DIAGRAM</span>' +
           '</button>' +
           '<button class="mp-expand" id="mpExpandBtn" title="Expand for presenting" aria-label="Expand map">' +
             '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 2H2v4M10 2h4v4M14 10v4h-4M2 10v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
@@ -2555,10 +2600,12 @@ function renderMapDetail(){
             '<svg width="12" height="12" viewBox="0 0 16 16"><path d="M3 4h10M6.5 4V2.5h3V4M4.5 4l.7 9.5h5.6L11.5 4" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/></svg>' +
           '</button>' +
         '</div>' +
-        (entry.image ?
+        ((entry.image || entry.snapshot) ?
           '<div class="entry-image-thumb" data-cat="' + cat.key + '" data-id="' + entry.id + '" title="View full-size" role="button" tabindex="0">' +
-            '<img src="' + entry.image + '" alt="' + esc(entry.title || cat.label) + ' snapshot">' +
-            '<button type="button" class="entry-image-remove" data-cat="' + cat.key + '" data-id="' + entry.id + '" title="Remove photo" aria-label="Remove photo">' +
+            (entry.snapshot ?
+              '<canvas class="entry-snapshot-canvas" data-cat="' + cat.key + '" data-id="' + entry.id + '" aria-label="' + esc(entry.title || cat.label) + ' diagram"></canvas>' :
+              '<img src="' + entry.image + '" alt="' + esc(entry.title || cat.label) + ' snapshot">') +
+            '<button type="button" class="entry-image-remove" data-cat="' + cat.key + '" data-id="' + entry.id + '" title="Remove diagram" aria-label="Remove diagram">' +
               '<svg width="9" height="9" viewBox="0 0 10 10"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>' +
             '</button>' +
           '</div>'
@@ -2579,6 +2626,13 @@ function renderMapDetail(){
   html += '</div></div>';
 
   content.innerHTML = html;
+
+  content.querySelectorAll('.entry-snapshot-canvas').forEach(function(canvasEl){
+    var catKey = canvasEl.getAttribute('data-cat'), id = canvasEl.getAttribute('data-id');
+    var arr = mapData.categories[catKey];
+    var entry = arr && arr.find(function(e){ return e.id === id; });
+    if (entry && entry.snapshot) renderSnapshotCanvas(canvasEl, entry.snapshot, m.minimap);
+  });
 
   if (panelDrawResize){ panelDrawResize(); panelDrawResize = null; }
   if (m.minimap) panelDrawResize = setupDrawing(content);
