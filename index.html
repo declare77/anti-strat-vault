@@ -590,7 +590,10 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 .mp-frame.agent-drop-target{outline:2px dashed var(--accent); outline-offset:-2px;}
 .agent-marker{
   position:absolute;
-  width:19px; height:19px; /* 60% of the original 32px */
+  /* Sized in JS as a % of the frame's current rendered width (see
+     agentMarkerDiameter), not a fixed px value — so it looks the same
+     relative size whether the map is shown small in the sidebar or
+     blown up in the fullscreen/lightbox view. */
   transform:translate(-50%,-50%);
   border-radius:50%;
   overflow:visible;
@@ -616,8 +619,8 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 .agent-marker:hover .agent-marker-remove, .agent-marker:focus-within .agent-marker-remove{opacity:1;}
 .agent-marker-remove:hover{color:var(--accent); border-color:var(--accent);}
 .agent-drag-ghost{
-  position:fixed; z-index:200; width:23px; height:23px; /* 60% of the original 38px */
-  margin-left:-11.5px; margin-top:-11.5px;
+  position:fixed; z-index:200;
+  /* Sized in JS to match agentMarkerDiameter, same reasoning as .agent-marker. */
   pointer-events:none;
   border-radius:50%;
 }
@@ -632,7 +635,8 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 
 @media (pointer:coarse){
   .agent-marker-remove{opacity:.85;}
-  .agent-marker{width:23px; height:23px;} /* 60% of the original 38px */
+  /* Marker diameter on touch devices is handled in JS (agentMarkerDiameter's
+     coarse-pointer branch), not here. */
   /* Hover-to-reveal controls don't work with touch, so keep them
      visible (rather than invisible until an impossible hover) and
      size touch targets closer to the ~40px recommended minimum. */
@@ -1052,6 +1056,19 @@ function slotLabel(cat, idx){ return cat.slotWord + ' ' + (idx+1); }
 
 var DRAW_COLORS = ['#FF4655', '#3ECF6B', '#4FA3FF', '#FFD447']; // red, green, blue, yellow
 var DRAW_REF_W = 1000; // reference width strokes are recorded against
+
+// Agent marker diameter as a fraction of the frame's *current* rendered
+// width, clamped to sane bounds. This is deliberately proportional (not a
+// fixed px size) so a marker looks the same relative size whether the map
+// is shown small in the sidebar panel or blown up in the fullscreen/
+// lightbox view — a fixed px size looks right in exactly one of those and
+// wrong in the other, since a fullscreen minimap can be 2-3x wider.
+var AGENT_MARKER_RATIO = 0.035;
+function agentMarkerDiameter(frameW, coarse){
+  var minD = coarse ? 16 : 11;
+  var maxD = coarse ? 32 : 28;
+  return Math.min(maxD, Math.max(minD, frameW * AGENT_MARKER_RATIO));
+}
 var drawTool = { color: DRAW_COLORS[0], width: 5, mode: 'draw' };
 
 var ICON_ERASER = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M16 3l5 5-9.5 9.5H6L3 14.5 16 3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 21h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
@@ -1151,6 +1168,10 @@ function setupDrawing(root){
     canvas.height = Math.round(cssH * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     redraw();
+    // agentsLayer doesn't exist yet on the very first resize() call (it's
+    // created further below) — harmless no-op until then, and correctly
+    // rescales existing markers on every resize/orientation-change after.
+    if (agentsLayer) resizeMarkerSizes();
   }
 
   function round4(n){ return Math.round(n*10000)/10000; }
@@ -1280,6 +1301,7 @@ function setupDrawing(root){
   var agentsLayer = document.createElement('div');
   agentsLayer.className = 'mp-agents-layer';
   frame.appendChild(agentsLayer);
+  var isCoarsePointer = !!(window.matchMedia && window.matchMedia('(pointer:coarse)').matches);
 
   function agentsList(){
     if (!mapData) return [];
@@ -1292,14 +1314,25 @@ function setupDrawing(root){
   }
   function clampPct(n){ return Math.min(1, Math.max(0, n)); }
 
+  function resizeMarkerSizes(){
+    var d = agentMarkerDiameter(cssW, isCoarsePointer) + 'px';
+    Array.prototype.forEach.call(agentsLayer.children, function(el){
+      el.style.width = d;
+      el.style.height = d;
+    });
+  }
+
   function renderMarkers(){
     agentsLayer.innerHTML = '';
+    var d = agentMarkerDiameter(cssW, isCoarsePointer) + 'px';
     agentsList().forEach(function(a){
       var meta = agentMeta(a.agent);
       var el = document.createElement('div');
       el.className = 'agent-marker side-' + a.side;
       el.style.left = (a.x*100) + '%';
       el.style.top = (a.y*100) + '%';
+      el.style.width = d;
+      el.style.height = d;
       el.innerHTML =
         '<img src="' + agentImgSrc(a.agent) + '" alt="' + esc(meta.name) + '" draggable="false">' +
         '<button type="button" class="agent-marker-remove" aria-label="Remove ' + esc(meta.name) + '" title="Remove ' + esc(meta.name) + '">' +
@@ -1399,6 +1432,11 @@ function setupDrawing(root){
         ghostEl.className = 'agent-drag-ghost side-' + selectedAgentSide;
         ghostEl.setAttribute('data-agent', agentId);
         ghostEl.innerHTML = '<img src="' + agentImgSrc(agentId) + '" alt="">';
+        var gd = agentMarkerDiameter(cssW, isCoarsePointer);
+        ghostEl.style.width = gd + 'px';
+        ghostEl.style.height = gd + 'px';
+        ghostEl.style.marginLeft = (-gd/2) + 'px';
+        ghostEl.style.marginTop = (-gd/2) + 'px';
         ghostEl.style.left = e.clientX+'px';
         ghostEl.style.top = e.clientY+'px';
         document.body.appendChild(ghostEl);
@@ -1454,7 +1492,7 @@ function setupDrawing(root){
     var markers = agentsList();
     return Promise.all(markers.map(function(a){ return loadAgentImageEl(agentImgSrc(a.agent)); }))
       .then(function(icons){
-        var r = Math.max(10, outW * 0.042 * 0.6); // matches the on-screen marker's 60% size
+        var r = agentMarkerDiameter(outW, false) / 2; // same formula as the live on-screen marker
         markers.forEach(function(a, i){
           var icon = icons[i];
           var cx = a.x*outW, cy = a.y*outH;
