@@ -1959,16 +1959,18 @@ function stopCloudSync(teamId){
 }
 
 /** Pushes one map's freshly-saved data up to the shared doc, if this team is
- *  shared. Uses set(...,{merge:true}) with a dotted field path so pushing
- *  one map never clobbers another map's data another player just saved. */
+ *  shared. Uses set(...,{merge:true}) with a real nested object (NOT a
+ *  dotted-string key — that only means "nested path" for update(), not for
+ *  set(..., {merge:true}), which stores a dotted string key as one literal
+ *  field name) so pushing one map never clobbers another map's data another
+ *  player just saved. */
 function pushMapToCloud(teamId, mapId, payload){
   var team = teams.find(function(t){ return t.id===teamId; });
   if (!cloudEnabled || !team || !team.shareCode) return;
   var key = teamId + '|' + mapId;
   cloudLastApplied[key] = payload.updatedAt; // suppress the echo of our own write
-  var patch = {};
-  patch['maps.' + mapId] = cloneMapForCloud(payload);
-  patch.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+  var patch = { maps: {}, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+  patch.maps[mapId] = cloneMapForCloud(payload);
   db.collection('sharedTeams').doc(team.shareCode).set(patch, {merge:true})
     .catch(function(err){ console.warn('cloud push failed', err); });
 }
@@ -2191,7 +2193,7 @@ function showShareModal(teamId){
           '<h3>Share “' + esc(team.name) + '” with your players</h3>' +
           (cloudEnabled ?
             ('<p>This creates a live link. Anyone who opens it can view <strong>and edit</strong> this entire strat book — every map, every strat, every agent placement — and changes show up for everyone instantly. Only share it with people you trust to edit it.</p>' +
-             '<p class="share-note">Text notes, drawing, and agent placements sync live. Photos attached via “Save as Image” stay local to your own browser for now.</p>' +
+             '<p class="share-note">Text notes, drawings, diagrams, and agent placements all sync live. Older photos attached via the previous “Save as Image” feature stay local to your own browser.</p>' +
              '<div class="share-status" id="shareStatus"></div>' +
              '<div class="modal-actions"><button class="btn" id="shareCancel">Cancel</button><button class="btn danger" id="shareGenerate">Create Share Link</button></div>')
           :
@@ -2234,7 +2236,7 @@ function showShareModal(teamId){
           '<p>Send players this code or link. Anyone who has it can view and edit this strat book, live.</p>' +
           '<div class="share-code-box"><code>' + esc(code) + '</code><button class="btn" id="shareCopyCode">Copy Code</button></div>' +
           '<div class="share-link-row"><input type="text" id="shareLinkInput" readonly value="' + esc(url) + '"><button class="btn" id="shareCopyLink">Copy Link</button></div>' +
-          '<p class="share-note">Text notes, drawing, and agent placements sync live. Photos attached via “Save as Image” stay local to your own browser for now.</p>' +
+          '<p class="share-note">Text notes, drawings, diagrams, and agent placements all sync live. Older photos attached via the previous “Save as Image” feature stay local to your own browser.</p>' +
           '<div class="share-status" id="shareStatus"></div>' +
           '<div class="modal-actions"><button class="btn" id="shareStop">Stop Sharing</button><button class="btn" id="shareCancel">Done</button></div>' +
         '</div>' +
