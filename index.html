@@ -1844,11 +1844,42 @@ function shareUrlFor(code){
   return location.origin + location.pathname + '?join=' + code;
 }
 
+// Firestore rejects arrays-of-arrays ("nested arrays are not supported"),
+// but a stroke's points are stored locally as [[x,y], [x,y], ...] — exactly
+// that shape. These convert points to/from a Firestore-safe {x,y} object
+// form at the cloud boundary; everything else in the app keeps using plain
+// [x,y] pairs, unaware any of this is happening.
+function pointsToCloud(points){
+  return (points || []).map(function(p){ return {x: p[0], y: p[1]}; });
+}
+function pointsFromCloud(points){
+  return (points || []).map(function(p){
+    return Array.isArray(p) ? p : [p.x, p.y];
+  });
+}
 function cloneMapForCloud(mapPayload){
   var clone = JSON.parse(JSON.stringify(mapPayload));
   Object.keys(clone.categories || {}).forEach(function(catKey){
     (clone.categories[catKey] || []).forEach(function(e){ e.image = null; });
   });
+  if (clone.drawing && Array.isArray(clone.drawing.strokes)){
+    clone.drawing.strokes = clone.drawing.strokes.map(function(s){
+      var s2 = Object.assign({}, s);
+      s2.points = pointsToCloud(s.points);
+      return s2;
+    });
+  }
+  return clone;
+}
+function cloneMapFromCloud(mapPayload){
+  var clone = JSON.parse(JSON.stringify(mapPayload));
+  if (clone.drawing && Array.isArray(clone.drawing.strokes)){
+    clone.drawing.strokes = clone.drawing.strokes.map(function(s){
+      var s2 = Object.assign({}, s);
+      s2.points = pointsFromCloud(s.points);
+      return s2;
+    });
+  }
   return clone;
 }
 function mergeIncomingPreservingImages(existingRaw, incoming){
@@ -1884,7 +1915,7 @@ function startCloudSync(teamId, code){
       if (cloudLastApplied[key] && incomingTs <= cloudLastApplied[key]) return;
       cloudLastApplied[key] = incomingTs;
       var existingRaw = backend.getRawMap(teamId, mapId);
-      backend.saveMap(teamId, mapId, mergeIncomingPreservingImages(existingRaw, incoming));
+      backend.saveMap(teamId, mapId, mergeIncomingPreservingImages(existingRaw, cloneMapFromCloud(incoming)));
     });
     if (data.name){
       var t = teams.find(function(x){ return x.id===teamId; });
@@ -1962,7 +1993,10 @@ function tryJoinFromUrl(){
       return;
     }
     var data = snap.data() || {};
-    backend.addTeamWithData(data.name || 'Shared Team', code, data.maps || {}).then(function(id){
+    var incomingMaps = data.maps || {};
+    var normalizedMaps = {};
+    Object.keys(incomingMaps).forEach(function(mapId){ normalizedMaps[mapId] = cloneMapFromCloud(incomingMaps[mapId]); });
+    backend.addTeamWithData(data.name || 'Shared Team', code, normalizedMaps).then(function(id){
       startCloudSync(id, code);
       selectTeam(id);
     });
