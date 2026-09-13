@@ -804,8 +804,13 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 }
 
 .entry-grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fill, minmax(260px,1fr));
+  /* Flex-wrap (not CSS Grid) on purpose: a manually widened card needs to
+     actually push the cards after it in the row to make room — see the
+     ResizeObserver-driven flex-basis lock on .entry-card below — and a
+     grid's column tracks don't reflow like that when one item's content
+     overflows them. */
+  display:flex;
+  flex-wrap:wrap;
   gap:14px;
 }
 .entry-card{
@@ -814,9 +819,12 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   border-radius:3px;
   padding:12px 14px 14px;
   display:flex; flex-direction:column; gap:8px;
-  /* The notes textarea can be resized wider than this card (resize:both,
-     below) — position+z-index so a widened card draws over its neighbors
-     in the grid instead of being clipped by or hidden under them. */
+  flex:1 1 260px;
+  min-width:260px;
+  /* Kept for the moment mid-drag before the ResizeObserver callback (see
+     JS) has caught up and pinned this card's own width to match — without
+     it the still-260px-wide card would flash a hidden/clipped edge under
+     its neighbor for a frame while the textarea itself is already wider. */
   position:relative;
 }
 .entry-card:focus-within{border-color:var(--border-strong); z-index:2;}
@@ -846,10 +854,13 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   cursor:pointer;
   font-family:var(--font-mono); font-size:11.5px; letter-spacing:.06em;
   transition:.15s;
+  flex:1 1 260px;
+  min-width:260px;
 }
 .entry-add-card:hover{border-color:var(--accent-dim); color:var(--accent); background:var(--accent-soft);}
 .entry-add-card.empty{
-  grid-column:1 / -1;
+  flex:1 1 100%;
+  min-width:0;
   flex-direction:column; gap:5px;
   min-height:96px;
 }
@@ -1035,7 +1046,11 @@ svg{display:block;}
   .example-panel .ex-grid{grid-template-columns:1fr;}
   .map-hero{margin:-18px -16px 18px; height:130px; padding:14px 16px;}
   .map-hero h2{font-size:22px;}
-  .entry-grid{grid-template-columns:1fr;}
+  .entry-grid{flex-direction:column;}
+  /* !important: a card may carry an inline flex-basis pinned by the resize
+     ResizeObserver (see JS) from a wider viewport — this still needs to
+     stack full-width here regardless. */
+  .entry-grid .entry-card, .entry-grid .entry-add-card{flex:1 1 auto !important; width:100% !important; min-width:0 !important;}
   .draw-toolbar{gap:8px;}
   .draw-thickness{order:10; width:100%;}
   .agent-tray-list{max-height:120px;}
@@ -3127,6 +3142,40 @@ function unsubscribeGrid(){
 
 /* ---------------- content: map detail ---------------- */
 
+// Strat cards sit in a flex-wrap row (.entry-grid) so that widening one
+// via its notes textarea's native resize handle actually pushes the cards
+// after it to wrap/shift instead of just overlapping them. The textarea's
+// own resize is invisible to normal JS events, so a ResizeObserver is used
+// to notice it and lock the CARD's flex-basis to match — that's what
+// makes the row's flex layout reflow the rest of the cards.
+var entryNotesResizeObserver = null;
+function wireEntryNotesResize(textarea){
+  if (typeof ResizeObserver === 'undefined') return;
+  if (!entryNotesResizeObserver){
+    entryNotesResizeObserver = new ResizeObserver(function(entries){
+      entries.forEach(function(entry){
+        var ta = entry.target;
+        if (!ta._entrySizeSeen){
+          // The observer always fires once immediately on observe(), with
+          // the textarea's normal (un-resized) size — skip that call so
+          // untouched cards keep their default flexible width instead of
+          // getting pinned to a fixed size on every render.
+          ta._entrySizeSeen = true;
+          return;
+        }
+        var card = ta.closest('.entry-card');
+        if (!card) return;
+        var cs = getComputedStyle(card);
+        var extra = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) +
+                    parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+        var needed = Math.ceil(ta.offsetWidth + extra);
+        card.style.flex = '0 0 ' + needed + 'px';
+      });
+    });
+  }
+  entryNotesResizeObserver.observe(textarea);
+}
+
 function updateSaveIndicatorEl(status){
   var el = document.getElementById('saveIndicator');
   if (!el) return;
@@ -3235,6 +3284,12 @@ function renderMapDetail(){
     var entry = arr && arr.find(function(e){ return e.id === id; });
     if (entry && entry.snapshot) renderSnapshotCanvas(canvasEl, entry.snapshot, m.minimap);
   });
+
+  // Re-wire the resize-reflow watcher onto this render's (fresh) textarea
+  // nodes — disconnect first so the old, now-detached ones from the
+  // previous render aren't held onto.
+  if (entryNotesResizeObserver) entryNotesResizeObserver.disconnect();
+  content.querySelectorAll('.entry-card .entry-notes').forEach(wireEntryNotesResize);
 
   if (panelDrawResize){ panelDrawResize(); panelDrawResize = null; }
   if (m.minimap) panelDrawResize = setupDrawing(content);
