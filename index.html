@@ -458,6 +458,15 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   display:flex; align-items:center; justify-content:center;
 }
 .minimap-panel .mp-expand:hover{color:var(--text); background:var(--bg-card-hover); border-color:var(--accent-dim);}
+.mp-head-actions{display:flex; align-items:center; gap:6px;}
+.minimap-panel .mp-snapshot{
+  background:none; border:1px solid var(--border-strong); color:var(--text-dim);
+  height:26px; padding:0 10px; border-radius:3px; cursor:pointer;
+  display:flex; align-items:center; gap:6px;
+  font-family:var(--font-mono); font-size:10px; letter-spacing:.06em;
+}
+.minimap-panel .mp-snapshot:hover{color:var(--text); background:var(--bg-card-hover); border-color:var(--accent-dim);}
+.minimap-panel .mp-snapshot:disabled{opacity:.5; cursor:default; background:none;}
 .minimap-panel .mp-frame{
   background:#EDEAE2;
   border-radius:3px;
@@ -737,6 +746,22 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   font-family:var(--font-body); font-size:11.5px; letter-spacing:0; color:var(--text-faint);
 }
 .entry-add-card:hover .add-card-hint{color:var(--accent);}
+
+.entry-image-thumb{
+  position:relative; display:block; width:100%;
+  border-radius:3px; overflow:hidden; border:1px solid var(--border);
+  cursor:pointer; background:#EDEAE2; line-height:0;
+}
+.entry-image-thumb img{width:100%; height:auto; display:block; aspect-ratio:1/1; object-fit:cover;}
+.entry-image-thumb:hover{border-color:var(--accent-dim);}
+.entry-image-remove{
+  position:absolute; top:5px; right:5px; width:20px; height:20px;
+  border-radius:50%; background:rgba(15,25,35,.75); border:1px solid rgba(255,255,255,.25);
+  color:#fff; padding:0; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; opacity:0; transition:opacity .12s;
+}
+.entry-image-thumb:hover .entry-image-remove, .entry-image-remove:focus-visible{opacity:1;}
+.entry-image-remove:hover{background:var(--accent); border-color:var(--accent);}
 .entry-title{
   background:transparent;
   border:none;
@@ -781,6 +806,48 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 .btn.danger{background:var(--accent); border-color:var(--accent); color:#0F1923; font-weight:700;}
 .btn.danger:hover{background:#ff5b68;}
 .modal.wide{max-width:560px;}
+
+/* ---------- SNAPSHOT → ATTACH-TO-STRAT MODAL ---------- */
+.modal.snap-modal{max-width:640px;}
+.snap-modal-body{display:flex; gap:18px; margin-bottom:18px; flex-wrap:wrap;}
+.snap-preview-wrap{
+  flex:1 1 220px; min-width:180px; max-width:280px;
+  border:1px solid var(--border-strong); border-radius:4px; overflow:hidden; background:#EDEAE2; line-height:0;
+}
+.snap-preview-wrap img{width:100%; display:block;}
+.snap-modal-form{flex:1 1 260px; min-width:220px; display:flex; flex-direction:column; gap:12px;}
+.snap-field-label{
+  font-family:var(--font-mono); font-size:10.5px; letter-spacing:.08em; color:var(--text-faint); display:block; margin-bottom:5px;
+}
+.snap-modal-form select{
+  width:100%; background:var(--bg-card); color:var(--text);
+  border:1px solid var(--border-strong); border-radius:3px; padding:8px 10px; font-size:13px;
+  font-family:var(--font-body);
+}
+.snap-overwrite-warn{
+  font-size:11.5px; color:var(--warn); line-height:1.5;
+}
+
+/* ---------- STRAT IMAGE VIEW MODAL ---------- */
+.strat-image-stage{
+  display:flex; gap:20px; max-width:min(1100px,92vw); max-height:88vh; align-items:stretch;
+}
+.strat-image-frame{
+  flex:1 1 auto; min-width:0; display:flex; align-items:center; justify-content:center;
+  background:#EDEAE2; border-radius:4px; box-shadow:0 20px 60px rgba(0,0,0,.5); overflow:hidden;
+}
+.strat-image-frame img{max-width:min(72vw,760px); max-height:88vh; display:block;}
+.strat-image-panel{
+  flex:0 0 300px; max-width:300px; max-height:88vh; overflow-y:auto;
+  background:var(--bg-raised); border:1px solid var(--border-strong); border-radius:4px;
+  padding:16px; display:flex; flex-direction:column; gap:6px;
+}
+.strat-image-catlabel{
+  font-family:var(--font-mono); font-size:10px; letter-spacing:.1em; color:var(--text-faint); margin-bottom:6px;
+}
+.strat-image-title{width:100%; margin-bottom:6px;}
+.strat-image-notes{width:100%; flex:1; min-height:160px;}
+.strat-image-panel .btn{margin-top:10px; align-self:flex-start;}
 #exportTextarea{
   width:100%; height:240px; resize:vertical;
   background:var(--bg); color:var(--text-dim);
@@ -832,6 +899,11 @@ svg{display:block;}
   .draw-toolbar{gap:8px;}
   .draw-thickness{order:10; width:100%;}
   .agent-tray-list{max-height:120px;}
+  .strat-image-stage{flex-direction:column; max-width:94vw; max-height:none; overflow-y:auto;}
+  .strat-image-frame img{max-width:88vw; max-height:52vh;}
+  .strat-image-panel{flex:none; max-width:none; max-height:none;}
+  .snap-modal-body{flex-direction:column;}
+  .snap-preview-wrap{max-width:none;}
 }
 
 @media (max-width:420px){
@@ -938,6 +1010,21 @@ var AGENTS = [
 ];
 function agentImgSrc(id){
   return 'Agents/' + id.charAt(0).toUpperCase() + id.slice(1) + '.png';
+}
+// Small cache so a "Save as Image" snapshot doesn't re-fetch the same agent
+// icon over and over across markers/maps. Never rejects — a failed icon
+// load resolves to null so one bad image can't sink the whole snapshot.
+var agentImageCache = {};
+function loadAgentImageEl(src){
+  if (!agentImageCache[src]){
+    agentImageCache[src] = new Promise(function(resolve){
+      var im = new Image();
+      im.onload = function(){ resolve(im); };
+      im.onerror = function(){ resolve(null); };
+      im.src = src;
+    });
+  }
+  return agentImageCache[src];
 }
 
 var CATEGORIES = [
@@ -1330,6 +1417,85 @@ function setupDrawing(root){
     });
   }
 
+  /* ---------------- save current view as an image ---------------- */
+  // Renders the minimap image + every drawn stroke + every agent marker onto
+  // an offscreen canvas at the minimap's native resolution — independent of
+  // whatever size the panel happens to be on screen — so the saved photo
+  // looks sharp whether it was captured from a phone or a wide desktop.
+  function buildSnapshotDataUrl(){
+    var outW = img.naturalWidth || cssW || 1024;
+    var outH = img.naturalHeight || cssH || 1024;
+
+    var out = document.createElement('canvas');
+    out.width = outW; out.height = outH;
+    var octx = out.getContext('2d');
+    octx.drawImage(img, 0, 0, outW, outH);
+
+    strokes().forEach(function(stroke){
+      if (!stroke.points || stroke.points.length < 1) return;
+      octx.globalCompositeOperation = stroke.mode === 'erase' ? 'destination-out' : 'source-over';
+      octx.strokeStyle = stroke.color || DRAW_COLORS[0];
+      octx.lineWidth = Math.max(1, (stroke.width || 5) * (outW / DRAW_REF_W));
+      octx.lineCap = 'round';
+      octx.lineJoin = 'round';
+      octx.beginPath();
+      stroke.points.forEach(function(p, i){
+        var x = p[0]*outW, y = p[1]*outH;
+        if (i === 0) octx.moveTo(x,y); else octx.lineTo(x,y);
+      });
+      if (stroke.points.length === 1){
+        var p0 = stroke.points[0];
+        octx.lineTo(p0[0]*outW + 0.01, p0[1]*outH + 0.01);
+      }
+      octx.stroke();
+    });
+    octx.globalCompositeOperation = 'source-over';
+
+    var markers = agentsList();
+    return Promise.all(markers.map(function(a){ return loadAgentImageEl(agentImgSrc(a.agent)); }))
+      .then(function(icons){
+        var r = Math.max(16, outW * 0.042);
+        markers.forEach(function(a, i){
+          var icon = icons[i];
+          var cx = a.x*outW, cy = a.y*outH;
+          octx.save();
+          octx.beginPath();
+          octx.arc(cx, cy, r, 0, Math.PI*2);
+          octx.closePath();
+          octx.clip();
+          octx.fillStyle = '#0F1923';
+          octx.fillRect(cx-r, cy-r, r*2, r*2);
+          if (icon) octx.drawImage(icon, cx-r, cy-r, r*2, r*2);
+          octx.restore();
+          octx.beginPath();
+          octx.arc(cx, cy, r, 0, Math.PI*2);
+          octx.lineWidth = Math.max(2, r*0.16);
+          octx.strokeStyle = a.side === 'defense' ? '#0E8F80' : '#E23A49';
+          octx.stroke();
+        });
+        return out.toDataURL('image/png');
+      });
+  }
+
+  var snapshotBtn = root.querySelector('#mpSnapshotBtn');
+  if (snapshotBtn){
+    snapshotBtn.addEventListener('click', function(){
+      if (snapshotBtn.disabled) return;
+      snapshotBtn.disabled = true;
+      var label = snapshotBtn.querySelector('span');
+      var prevLabel = label ? label.textContent : '';
+      if (label) label.textContent = 'CAPTURING…';
+      buildSnapshotDataUrl().then(function(dataUrl){
+        showAttachSnapshotModal(dataUrl);
+      }).catch(function(){
+        showModal({ title:'Couldn’t save the image', body:'Something went wrong capturing the map. Please try again.', confirmLabel:'OK', onConfirm:function(){} });
+      }).then(function(){
+        snapshotBtn.disabled = false;
+        if (label) label.textContent = prevLabel;
+      });
+    });
+  }
+
   return function teardown(){
     window.removeEventListener('resize', resize);
     img.removeEventListener('load', resize);
@@ -1351,7 +1517,8 @@ function esc(s){
 }
 
 function genId(prefix){ return (prefix||'id') + '_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
-function makeEntry(){ return {id: genId('entry'), title:'', notes:''}; }
+function makeEntry(){ return {id: genId('entry'), title:'', notes:'', image:null}; }
+function entryHasContent(e){ return !!((e.title && e.title.trim()) || (e.notes && e.notes.trim()) || e.image); }
 
 function emptyMapData(mapId){
   var categories = {};
@@ -1373,7 +1540,12 @@ function normalizeMapData(mapId, raw){
     // slots can now be added or removed freely.
     if (Array.isArray(arr)){
       base.categories[c.key] = arr.map(function(e){
-        return { id: (e && e.id) || genId('entry'), title: (e && e.title) || '', notes: (e && e.notes) || '' };
+        return {
+          id: (e && e.id) || genId('entry'),
+          title: (e && e.title) || '',
+          notes: (e && e.notes) || '',
+          image: (e && typeof e.image === 'string' && e.image) ? e.image : null
+        };
       });
     }
   });
@@ -1398,7 +1570,7 @@ function countFilled(mapData){
   var n = 0;
   CATEGORIES.forEach(function(c){
     mapData.categories[c.key].forEach(function(e){
-      if ((e.title && e.title.trim()) || (e.notes && e.notes.trim())) n++;
+      if (entryHasContent(e)) n++;
     });
   });
   return n;
@@ -1639,6 +1811,150 @@ function showLightbox(src, label){
   lightboxDrawResize = setupDrawing(root);
 }
 
+/* ---------------- snapshot → attach to a strat ---------------- */
+
+function showAttachSnapshotModal(dataUrl){
+  if (!mapData) return;
+  var root = document.getElementById('modalRoot');
+
+  var catOptions = CATEGORIES.map(function(c){
+    return '<option value="' + c.key + '">' + esc(c.side.toUpperCase() + ' · ' + c.label) + '</option>';
+  }).join('');
+  var defaultCat = (CATEGORIES.find(function(c){ return c.side === selectedSide; }) || CATEGORIES[0]).key;
+
+  root.innerHTML =
+    '<div class="modal-backdrop" id="snapModalBackdrop">' +
+      '<div class="modal snap-modal">' +
+        '<h3>Save Map Snapshot</h3>' +
+        '<p>Pick which strat this picture belongs to. You can attach it to an existing strat or start a new one.</p>' +
+        '<div class="snap-modal-body">' +
+          '<div class="snap-preview-wrap"><img src="' + dataUrl + '" alt="Captured map snapshot"></div>' +
+          '<div class="snap-modal-form">' +
+            '<div>' +
+              '<span class="snap-field-label">CATEGORY</span>' +
+              '<select id="snapCatSelect">' + catOptions + '</select>' +
+            '</div>' +
+            '<div>' +
+              '<span class="snap-field-label">STRAT</span>' +
+              '<select id="snapEntrySelect"></select>' +
+            '</div>' +
+            '<div class="snap-overwrite-warn" id="snapOverwriteWarn" hidden>This strat already has a photo — saving will replace it.</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="modal-actions">' +
+          '<button class="btn" id="snapCancel">Cancel</button>' +
+          '<button class="btn danger" id="snapSave">Save to Strat</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  var catSelect = document.getElementById('snapCatSelect');
+  var entrySelect = document.getElementById('snapEntrySelect');
+  var warnEl = document.getElementById('snapOverwriteWarn');
+  catSelect.value = defaultCat;
+
+  function populateEntries(){
+    var catKey = catSelect.value;
+    var entries = (mapData.categories[catKey] || []);
+    var opts = entries.map(function(e, idx){
+      var label = (e.title && e.title.trim()) ? e.title.trim() : ('Slot ' + (idx+1) + ' (untitled)');
+      return '<option value="' + e.id + '">' + esc(label) + (e.image ? ' 📷' : '') + '</option>';
+    }).join('');
+    opts += '<option value="__new__">+ New strat slot</option>';
+    entrySelect.innerHTML = opts;
+    updateWarn();
+  }
+  function updateWarn(){
+    var catKey = catSelect.value;
+    var val = entrySelect.value;
+    var entries = (mapData.categories[catKey] || []);
+    var entry = entries.find(function(e){ return e.id === val; });
+    warnEl.hidden = !(entry && entry.image);
+  }
+
+  populateEntries();
+  catSelect.addEventListener('change', populateEntries);
+  entrySelect.addEventListener('change', updateWarn);
+
+  function close(){ root.innerHTML = ''; document.removeEventListener('keydown', onKey); }
+  function onKey(e){ if (e.key === 'Escape') close(); }
+  document.getElementById('snapCancel').addEventListener('click', close);
+  document.getElementById('snapModalBackdrop').addEventListener('click', function(e){ if (e.target.id === 'snapModalBackdrop') close(); });
+  document.addEventListener('keydown', onKey);
+
+  document.getElementById('snapSave').addEventListener('click', function(){
+    var catKey = catSelect.value;
+    var val = entrySelect.value;
+    var arr = mapData.categories[catKey];
+    if (!arr) { close(); return; }
+    var entry;
+    if (val === '__new__'){
+      entry = makeEntry();
+      arr.push(entry);
+    } else {
+      entry = arr.find(function(e){ return e.id === val; });
+    }
+    if (entry){
+      entry.image = dataUrl;
+      scheduleSave();
+      flushSave();
+    }
+    close();
+    renderMapDetail();
+  });
+}
+
+/* ---------------- strat image + notes viewer ---------------- */
+
+function showStratImageModal(catKey, entryId){
+  if (!mapData || !mapData.categories[catKey]) return;
+  var cat = CATEGORIES.find(function(c){ return c.key === catKey; });
+  var entry = mapData.categories[catKey].find(function(e){ return e.id === entryId; });
+  if (!cat || !entry || !entry.image) return;
+
+  var root = document.getElementById('modalRoot');
+  root.innerHTML =
+    '<div class="lightbox-backdrop" id="stratImgBackdrop">' +
+      '<button class="lightbox-close" id="stratImgClose" aria-label="Close">' +
+        '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 2l12 12M14 2L2 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>' +
+      '</button>' +
+      '<div class="strat-image-stage">' +
+        '<div class="strat-image-frame"><img src="' + entry.image + '" alt="' + esc(entry.title || cat.label) + ' snapshot"></div>' +
+        '<div class="strat-image-panel">' +
+          '<span class="strat-image-catlabel"><span class="cat-side-mark ' + cat.side + '"></span> ' + esc(cat.label.toUpperCase()) + '</span>' +
+          '<input type="text" class="entry-title strat-image-title" id="stratImgTitle" placeholder="Name this strat…" value="' + esc(entry.title) + '">' +
+          '<textarea class="entry-notes strat-image-notes" id="stratImgNotes" placeholder="' + esc(cat.placeholder) + '">' + esc(entry.notes) + '</textarea>' +
+          '<button class="btn" id="stratImgRemove">Remove Photo</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  function close(){
+    root.innerHTML = '';
+    document.removeEventListener('keydown', onKey);
+    renderMapDetail();
+  }
+  function onKey(e){ if (e.key === 'Escape') close(); }
+  document.getElementById('stratImgClose').addEventListener('click', close);
+  document.getElementById('stratImgBackdrop').addEventListener('click', function(e){ if (e.target.id === 'stratImgBackdrop') close(); });
+  document.addEventListener('keydown', onKey);
+
+  var titleEl = document.getElementById('stratImgTitle');
+  var notesEl = document.getElementById('stratImgNotes');
+  titleEl.addEventListener('input', function(){ entry.title = titleEl.value; scheduleSave(); });
+  notesEl.addEventListener('input', function(){ entry.notes = notesEl.value; scheduleSave(); });
+  titleEl.addEventListener('focus', function(){ isEditing = true; });
+  notesEl.addEventListener('focus', function(){ isEditing = true; });
+  titleEl.addEventListener('blur', function(){ isEditing = false; });
+  notesEl.addEventListener('blur', function(){ isEditing = false; });
+
+  document.getElementById('stratImgRemove').addEventListener('click', function(){
+    entry.image = null;
+    scheduleSave();
+    close();
+  });
+}
+
 /* ---------------- topbar / breadcrumb ---------------- */
 
 function renderTopbar(){
@@ -1760,9 +2076,15 @@ function renderMapDetail(){
   if (m.minimap){
     html += '<div class="minimap-panel">' +
       '<div class="mp-head"><span class="mp-label">MAP LAYOUT</span>' +
-        '<button class="mp-expand" id="mpExpandBtn" title="Expand for presenting" aria-label="Expand map">' +
-          '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 2H2v4M10 2h4v4M14 10v4h-4M2 10v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-        '</button>' +
+        '<div class="mp-head-actions">' +
+          '<button type="button" class="mp-snapshot" id="mpSnapshotBtn" title="Save the drawing and agents on the map as an image, tied to a strat" aria-label="Save map as image">' +
+            '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8.5" r="2.3" stroke="currentColor" stroke-width="1.3"/><path d="M6 4l.8-1.5h2.4L10 4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>' +
+            '<span>SAVE AS IMAGE</span>' +
+          '</button>' +
+          '<button class="mp-expand" id="mpExpandBtn" title="Expand for presenting" aria-label="Expand map">' +
+            '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 2H2v4M10 2h4v4M14 10v4h-4M2 10v4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+          '</button>' +
+        '</div>' +
       '</div>' +
       '<div class="mp-frame" id="mpFrame"><img src="' + m.minimap + '" alt="' + esc(m.name) + ' minimap"></div>' +
       buildAgentTrayHTML() +
@@ -1788,7 +2110,7 @@ function renderMapDetail(){
 
   cats.forEach(function(cat){
     var entries = mapData.categories[cat.key];
-    var filled = entries.filter(function(e){ return (e.title&&e.title.trim())||(e.notes&&e.notes.trim()); }).length;
+    var filled = entries.filter(entryHasContent).length;
     var countLabel = entries.length ? (filled + ' / ' + entries.length) : 'No strats yet';
     html += '<div class="category-block">';
     html += '<div class="category-head" data-catkey="' + cat.key + '">';
@@ -1805,6 +2127,14 @@ function renderMapDetail(){
             '<svg width="12" height="12" viewBox="0 0 16 16"><path d="M3 4h10M6.5 4V2.5h3V4M4.5 4l.7 9.5h5.6L11.5 4" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/></svg>' +
           '</button>' +
         '</div>' +
+        (entry.image ?
+          '<div class="entry-image-thumb" data-cat="' + cat.key + '" data-id="' + entry.id + '" title="View full-size" role="button" tabindex="0">' +
+            '<img src="' + entry.image + '" alt="' + esc(entry.title || cat.label) + ' snapshot">' +
+            '<button type="button" class="entry-image-remove" data-cat="' + cat.key + '" data-id="' + entry.id + '" title="Remove photo" aria-label="Remove photo">' +
+              '<svg width="9" height="9" viewBox="0 0 10 10"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>' +
+            '</button>' +
+          '</div>'
+        : '') +
         '<input type="text" class="entry-title" data-cat="' + cat.key + '" data-idx="' + idx + '" placeholder="Name this strat…" value="' + esc(entry.title) + '">' +
         '<textarea class="entry-notes" data-cat="' + cat.key + '" data-idx="' + idx + '" placeholder="' + esc(cat.placeholder) + '">' + esc(entry.notes) + '</textarea>' +
       '</div>';
@@ -1831,7 +2161,7 @@ function refreshCatCounts(){
     var el = content.querySelector('[data-catcount="' + cat.key + '"]');
     if (!el) return;
     var entries = mapData.categories[cat.key];
-    var filled = entries.filter(function(e){ return (e.title&&e.title.trim())||(e.notes&&e.notes.trim()); }).length;
+    var filled = entries.filter(entryHasContent).length;
     el.textContent = entries.length ? (filled + ' / ' + entries.length) : 'No strats yet';
   });
 }
@@ -2066,6 +2396,28 @@ content.addEventListener('click', function(e){
   if (delBtn){
     deleteStrat(delBtn.getAttribute('data-cat'), delBtn.getAttribute('data-id'));
     return;
+  }
+  var removeImgBtn = e.target.closest('.entry-image-remove');
+  if (removeImgBtn){
+    e.stopPropagation();
+    var rCat = removeImgBtn.getAttribute('data-cat'), rId = removeImgBtn.getAttribute('data-id');
+    var rArr = mapData && mapData.categories[rCat];
+    var rEntry = rArr && rArr.find(function(x){ return x.id === rId; });
+    if (rEntry){ rEntry.image = null; scheduleSave(); renderMapDetail(); }
+    return;
+  }
+  var thumb = e.target.closest('.entry-image-thumb');
+  if (thumb){
+    showStratImageModal(thumb.getAttribute('data-cat'), thumb.getAttribute('data-id'));
+    return;
+  }
+});
+content.addEventListener('keydown', function(e){
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  var thumb = e.target.closest('.entry-image-thumb');
+  if (thumb){
+    e.preventDefault();
+    showStratImageModal(thumb.getAttribute('data-cat'), thumb.getAttribute('data-id'));
   }
 });
 
