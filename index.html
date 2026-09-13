@@ -542,12 +542,25 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 
 /* ---------- AGENT TRAY + MARKERS ---------- */
 .agent-tray{margin-top:12px;}
+.agent-tray-head{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  margin-bottom:7px;
+}
 .agent-tray-label{
   font-family:var(--font-mono); font-size:9.5px; letter-spacing:.08em; color:var(--text-faint);
-  margin-bottom:7px;
 }
 .agent-tray-label .side-attack{color:var(--accent);}
 .agent-tray-label .side-defense{color:var(--defense);}
+.agent-side-toggle{display:flex; gap:4px; flex:none;}
+.agent-side-btn{
+  font-family:var(--font-mono); font-weight:700; font-size:9.5px; letter-spacing:.06em;
+  padding:4px 9px; border-radius:3px;
+  background:var(--bg-card); border:1px solid var(--border); color:var(--text-faint);
+  cursor:pointer;
+}
+.agent-side-btn:hover{color:var(--text);}
+.agent-side-btn.active[data-agentside="attack"]{background:var(--accent-soft); border-color:var(--accent); color:var(--accent);}
+.agent-side-btn.active[data-agentside="defense"]{background:var(--defense-soft); border-color:var(--defense); color:var(--defense);}
 .agent-tray-list{
   display:flex; flex-wrap:wrap; gap:6px;
   max-height:150px; overflow-y:auto;
@@ -981,7 +994,13 @@ function buildAgentTrayHTML(){
   }).join('');
   return '' +
     '<div class="agent-tray">' +
-      '<div class="agent-tray-label">DRAG AGENTS ONTO THE MAP · <span class="side-attack">RED = ATTACK</span> · <span class="side-defense">GREEN = DEFENSE</span></div>' +
+      '<div class="agent-tray-head">' +
+        '<div class="agent-tray-label">DRAG AGENTS ONTO THE MAP</div>' +
+        '<div class="agent-side-toggle" role="group" aria-label="New marker color">' +
+          '<button type="button" class="agent-side-btn' + (selectedAgentSide==='attack'?' active':'') + '" data-agentside="attack">ATTACK</button>' +
+          '<button type="button" class="agent-side-btn' + (selectedAgentSide==='defense'?' active':'') + '" data-agentside="defense">DEFENSE</button>' +
+        '</div>' +
+      '</div>' +
       '<div class="agent-tray-list">' + chips + '</div>' +
     '</div>';
 }
@@ -1273,7 +1292,7 @@ function setupDrawing(root){
       var rect = frame.getBoundingClientRect();
       var x = clampPct((e.clientX - rect.left) / rect.width);
       var y = clampPct((e.clientY - rect.top) / rect.height);
-      agentsList().push({id: genId('agent'), agent: ghostEl.getAttribute('data-agent'), side: selectedSide, x: round4(x), y: round4(y)});
+      agentsList().push({id: genId('agent'), agent: ghostEl.getAttribute('data-agent'), side: selectedAgentSide, x: round4(x), y: round4(y)});
       commitDrawChange();
       renderMarkers();
     }
@@ -1290,7 +1309,7 @@ function setupDrawing(root){
         trayPointerId = e.pointerId;
         var agentId = chip.getAttribute('data-agent');
         ghostEl = document.createElement('div');
-        ghostEl.className = 'agent-drag-ghost side-' + selectedSide;
+        ghostEl.className = 'agent-drag-ghost side-' + selectedAgentSide;
         ghostEl.setAttribute('data-agent', agentId);
         ghostEl.innerHTML = '<img src="' + agentImgSrc(agentId) + '" alt="">';
         ghostEl.style.left = e.clientX+'px';
@@ -1299,6 +1318,14 @@ function setupDrawing(root){
         window.addEventListener('pointermove', trayMove);
         window.addEventListener('pointerup', trayEnd);
         window.addEventListener('pointercancel', trayEnd);
+      });
+    });
+    Array.prototype.forEach.call(tray.querySelectorAll('.agent-side-btn'), function(btn){
+      btn.addEventListener('click', function(){
+        selectedAgentSide = btn.getAttribute('data-agentside');
+        Array.prototype.forEach.call(tray.querySelectorAll('.agent-side-btn'), function(b){
+          b.classList.toggle('active', b === btn);
+        });
       });
     });
   }
@@ -1485,6 +1512,11 @@ var teams = [];
 var selectedTeamId = null;
 var selectedMapId = null;
 var selectedSide = 'attack';
+// Which color newly-dropped agent markers get. Deliberately separate from
+// selectedSide (the strat-book Attack/Defense tab) so switching which
+// strats you're reading doesn't also change what color the next marker
+// you place will be.
+var selectedAgentSide = 'attack';
 var mapData = null;
 var isEditing = false;
 var dirty = false;
@@ -1903,6 +1935,7 @@ function selectMap(mapId){
   unsubscribeMapDetail();
   selectedMapId = mapId;
   selectedSide = 'attack';
+  selectedAgentSide = 'attack';
   mapData = emptyMapData(mapId);
   renderTopbar();
   renderMapDetail();
