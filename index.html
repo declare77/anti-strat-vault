@@ -618,7 +618,7 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 }
 .ability-hud.open{display:flex;}
 .ability-hud-item{
-  width:26px; height:26px; flex:none; padding:0;
+  width:34px; height:34px; flex:none; padding:0;
   border-radius:50%; overflow:hidden;
   border:2px solid var(--border-strong);
   background:var(--bg-card);
@@ -701,7 +701,6 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 .ability-marker.dragging{cursor:grabbing; z-index:5;}
 .ability-marker img{
   width:100%; height:100%; border-radius:50%; object-fit:cover; display:block;
-  border:2px solid #C7CCD1;
   background:#0F1923;
   box-shadow:0 2px 6px rgba(0,0,0,.5);
   transition:opacity .1s, filter .1s;
@@ -709,7 +708,7 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 .ability-marker.will-delete img{opacity:.4; filter:grayscale(1);}
 .ability-marker.will-delete .ability-marker-remove{opacity:1; background:var(--accent); border-color:var(--accent); color:#0F1923;}
 .ability-live-ghost{pointer-events:none; animation:liveGhostPulse 1s ease-in-out infinite;}
-.ability-live-ghost img{box-shadow:0 0 0 2px #C7CCD1, 0 2px 6px rgba(0,0,0,.5);}
+.ability-live-ghost img{box-shadow:0 2px 6px rgba(0,0,0,.5);}
 .ability-marker-remove{
   position:absolute; top:-5px; right:-5px; width:13px; height:13px;
   border-radius:50%; background:var(--bg-raised); border:1px solid var(--border-strong);
@@ -726,7 +725,6 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 }
 .ability-drag-ghost img{
   width:100%; height:100%; border-radius:50%; object-fit:cover; display:block;
-  border:2px solid #C7CCD1;
   background:#0F1923;
   box-shadow:0 4px 14px rgba(0,0,0,.5);
   opacity:.9;
@@ -1302,8 +1300,9 @@ function renderSnapshotCanvas(canvas, snapshot, minimapSrc){
         ctx.strokeStyle = a.side === 'defense' ? '#0E8F80' : '#E23A49';
         ctx.stroke();
       });
-      // Ability icons draw on top of agent markers, smaller and with a
-      // plain neutral ring (they aren't tied to a side the way agents are).
+      // Ability icons draw on top of agent markers, smaller than agent
+      // markers and without a ring (they aren't tied to a side the way
+      // agents are, and a border made them harder to tell apart at a glance).
       var ar = abilityMarkerDiameter(w, false) / 2;
       abilityMarkers.forEach(function(a, i){
         var icon = abIcons[i];
@@ -1317,11 +1316,6 @@ function renderSnapshotCanvas(canvas, snapshot, minimapSrc){
         ctx.fillRect(cx-ar, cy-ar, ar*2, ar*2);
         if (icon) ctx.drawImage(icon, cx-ar, cy-ar, ar*2, ar*2);
         ctx.restore();
-        ctx.beginPath();
-        ctx.arc(cx, cy, ar, 0, Math.PI*2);
-        ctx.lineWidth = Math.max(1.5, ar*0.16);
-        ctx.strokeStyle = '#C7CCD1';
-        ctx.stroke();
       });
     });
   };
@@ -1368,7 +1362,7 @@ function agentMarkerDiameter(frameW, coarse){
 }
 // Ability icons read as sub-markers on top of the map, so they're sized a
 // bit smaller than an agent icon rather than sharing its exact diameter.
-var ABILITY_MARKER_SCALE = 0.72;
+var ABILITY_MARKER_SCALE = 0.88;
 function abilityMarkerDiameter(frameW, coarse){
   return agentMarkerDiameter(frameW, coarse) * ABILITY_MARKER_SCALE;
 }
@@ -1955,8 +1949,8 @@ function setupDrawing(root){
     var r = chip.getBoundingClientRect();
     var hb = hud.getBoundingClientRect();
     var cx = r.left + r.width/2;
-    var top = r.top - hb.height - 8;
-    if (top < 4) top = r.bottom + 8;
+    var top = r.top - hb.height - 4;
+    if (top < 4) top = r.bottom + 4;
     var left = Math.min(Math.max(8, cx - hb.width/2), window.innerWidth - hb.width - 8);
     hud.style.left = Math.max(4, left) + 'px';
     hud.style.top = top + 'px';
@@ -2012,7 +2006,7 @@ function setupDrawing(root){
     hudHideTimer = setTimeout(function(){
       if (abilityHud) abilityHud.classList.remove('open');
       hudAgentId = null;
-    }, 180);
+    }, 500);
   }
 
   if (tray){
