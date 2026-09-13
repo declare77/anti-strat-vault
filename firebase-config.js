@@ -10,10 +10,10 @@
 // Until apiKey/projectId below are filled in, the app works exactly as
 // before and "Share Strat Book" will say sharing isn't set up yet.
 window.__FIREBASE_CONFIG__ = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyCfURN-xDE0vCxrUvOtdfhzLhzTtifoHbE",
+  authDomain: "anti-strat-vault.firebaseapp.com",
+  projectId: "anti-strat-vault",
+  storageBucket: "anti-strat-vault.firebasestorage.app",
+  messagingSenderId: "226160957141",
+  appId: "1:226160957141:web:0ec3dc57928a734067745c"
 };
