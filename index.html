@@ -577,6 +577,7 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   max-height:150px; overflow-y:auto;
   padding:8px; background:var(--bg-raised); border:1px solid var(--border); border-radius:4px;
 }
+.agent-chip-wrap{position:relative; display:inline-flex; flex:none;}
 .agent-chip{
   width:36px; height:36px; flex:none; padding:0;
   border-radius:50%; overflow:hidden;
@@ -587,6 +588,45 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 }
 .agent-chip:hover{border-color:var(--accent-dim);}
 .agent-chip img{width:100%; height:100%; object-fit:cover; display:block; pointer-events:none;}
+/* Hovering a chip (mouse/trackpad) pops up its ability-icon HUD, built and
+   positioned in JS (showAbilityHud) — see the ability-hud rules below. On
+   touch there's no hover, so this small corner badge is the tap target
+   instead (hidden here, shown under the pointer:coarse block). */
+.agent-chip-abilities-toggle{
+  display:none;
+  position:absolute; right:-3px; bottom:-3px; width:15px; height:15px;
+  border-radius:50%; padding:0;
+  background:var(--bg-raised); border:1px solid var(--border-strong);
+  color:var(--text-faint);
+  align-items:center; justify-content:center;
+  cursor:pointer;
+}
+.agent-chip-abilities-toggle:hover{color:var(--accent); border-color:var(--accent);}
+@media (pointer:coarse){
+  .agent-chip-abilities-toggle{display:flex;}
+}
+/* Floating ability-icon picker — one shared element per mounted view,
+   repositioned/repopulated for whichever chip triggered it (showAbilityHud).
+   Fixed-position so it always draws above the tray regardless of scroll. */
+.ability-hud{
+  position:fixed; z-index:120;
+  display:none;
+  gap:5px; padding:6px;
+  background:var(--bg-raised); border:1px solid var(--border-strong); border-radius:6px;
+  box-shadow:0 6px 18px rgba(0,0,0,.5);
+  max-width:200px; flex-wrap:wrap;
+}
+.ability-hud.open{display:flex;}
+.ability-hud-item{
+  width:26px; height:26px; flex:none; padding:0;
+  border-radius:50%; overflow:hidden;
+  border:2px solid var(--border-strong);
+  background:var(--bg-card);
+  cursor:grab;
+  touch-action:none;
+}
+.ability-hud-item:hover{border-color:var(--accent-dim);}
+.ability-hud-item img{width:100%; height:100%; object-fit:cover; display:block; pointer-events:none;}
 
 .mp-agents-layer{position:absolute; inset:0; pointer-events:none;}
 .mp-frame.agent-drop-target{outline:2px dashed var(--accent); outline-offset:-2px;}
@@ -646,6 +686,52 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 }
 .agent-drag-ghost.side-defense img{border-color:var(--defense);}
 
+/* Ability markers reuse the same positioning/behavior as agent markers
+   (drag, remove-X, live ghost, drag-off-to-delete) at a smaller size and
+   with a plain ring — abilities aren't tied to a side the way agents are. */
+.ability-marker{
+  position:absolute;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  overflow:visible;
+  cursor:grab;
+  pointer-events:auto;
+  touch-action:none;
+}
+.ability-marker.dragging{cursor:grabbing; z-index:5;}
+.ability-marker img{
+  width:100%; height:100%; border-radius:50%; object-fit:cover; display:block;
+  border:2px solid #C7CCD1;
+  background:#0F1923;
+  box-shadow:0 2px 6px rgba(0,0,0,.5);
+  transition:opacity .1s, filter .1s;
+}
+.ability-marker.will-delete img{opacity:.4; filter:grayscale(1);}
+.ability-marker.will-delete .ability-marker-remove{opacity:1; background:var(--accent); border-color:var(--accent); color:#0F1923;}
+.ability-live-ghost{pointer-events:none; animation:liveGhostPulse 1s ease-in-out infinite;}
+.ability-live-ghost img{box-shadow:0 0 0 2px #C7CCD1, 0 2px 6px rgba(0,0,0,.5);}
+.ability-marker-remove{
+  position:absolute; top:-5px; right:-5px; width:13px; height:13px;
+  border-radius:50%; background:var(--bg-raised); border:1px solid var(--border-strong);
+  color:var(--text-faint); padding:0;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; opacity:0; transition:opacity .12s;
+}
+.ability-marker:hover .ability-marker-remove, .ability-marker:focus-within .ability-marker-remove{opacity:1;}
+.ability-marker-remove:hover{color:var(--accent); border-color:var(--accent);}
+.ability-drag-ghost{
+  position:fixed; z-index:200;
+  pointer-events:none;
+  border-radius:50%;
+}
+.ability-drag-ghost img{
+  width:100%; height:100%; border-radius:50%; object-fit:cover; display:block;
+  border:2px solid #C7CCD1;
+  background:#0F1923;
+  box-shadow:0 4px 14px rgba(0,0,0,.5);
+  opacity:.9;
+}
+
 @media (pointer:coarse){
   /* Hover-to-reveal doesn't work with touch, but keeping the remove-X
      always visible instead just permanently covers part of the agent
@@ -653,6 +739,7 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
      the map to delete it (wireMarkerDrag's will-delete path), so hide
      the X entirely here rather than showing it. */
   .agent-marker-remove{display:none;}
+  .ability-marker-remove{display:none;}
   /* Marker diameter on touch devices is handled in JS (agentMarkerDiameter's
      coarse-pointer branch), not here. */
   /* Hover-to-reveal controls don't work with touch, so keep them
@@ -729,8 +816,12 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   border-radius:3px;
   padding:12px 14px 14px;
   display:flex; flex-direction:column; gap:8px;
+  /* The notes textarea can be resized wider than this card (resize:both,
+     below) — position+z-index so a widened card draws over its neighbors
+     in the grid instead of being clipped by or hidden under them. */
+  position:relative;
 }
-.entry-card:focus-within{border-color:var(--border-strong);}
+.entry-card:focus-within{border-color:var(--border-strong); z-index:2;}
 .entry-card-head{
   display:flex; align-items:center; justify-content:space-between; gap:8px;
 }
@@ -799,8 +890,9 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 .entry-notes{
   background:transparent;
   border:none;
-  resize:vertical;
+  resize:both;
   min-height:76px;
+  min-width:140px;
   font-size:12.5px;
   line-height:1.55;
   color:var(--text-dim);
@@ -1061,6 +1153,40 @@ var AGENTS = [
   {id:'veto', name:'Veto'}, {id:'viper', name:'Viper'}, {id:'vyse', name:'Vyse'},
   {id:'waylay', name:'Waylay'}, {id:'yoru', name:'Yoru'}
 ];
+// Q/E/C/X (+P for the couple of agents with a distinct passive icon, e.g.
+// Jett/Astra) for every playable agent — sourced from valorant-api.com.
+// Drives the hover-ability HUD on each agent chip (buildAbilityHudHTML).
+var AGENT_ABILITIES = {
+  astra:[{key:'Q',name:'Nova Pulse'},{key:'E',name:'Nebula  / Dissipate'},{key:'C',name:'Gravity Well'},{key:'X',name:'Astral Form / Cosmic Divide'},{key:'P',name:'Astral Form'}],
+  breach:[{key:'Q',name:'Flashpoint'},{key:'E',name:'Fault Line'},{key:'C',name:'Aftershock'},{key:'X',name:'Rolling Thunder'}],
+  brimstone:[{key:'Q',name:'Incendiary'},{key:'E',name:'Sky Smoke'},{key:'C',name:'Stim Beacon'},{key:'X',name:'Orbital Strike'}],
+  chamber:[{key:'Q',name:'Headhunter'},{key:'E',name:'Rendezvous'},{key:'C',name:'Trademark'},{key:'X',name:'Tour De Force'}],
+  clove:[{key:'Q',name:'Meddle'},{key:'E',name:'Ruse'},{key:'C',name:'Pick-me-up'},{key:'X',name:'Not Dead Yet'}],
+  cypher:[{key:'Q',name:'Cyber Cage'},{key:'E',name:'Spycam'},{key:'C',name:'Trapwire'},{key:'X',name:'Neural Theft'}],
+  deadlock:[{key:'Q',name:'Sonic Sensor'},{key:'E',name:'GravNet'},{key:'C',name:'Barrier Mesh'},{key:'X',name:'Annihilation'}],
+  fade:[{key:'Q',name:'Seize'},{key:'E',name:'Haunt'},{key:'C',name:'Prowler'},{key:'X',name:'Nightfall'}],
+  gekko:[{key:'Q',name:'Wingman'},{key:'E',name:'Dizzy'},{key:'C',name:'Mosh Pit'},{key:'X',name:'Thrash'}],
+  harbor:[{key:'Q',name:'High Tide'},{key:'E',name:'Cove'},{key:'C',name:'Storm Surge'},{key:'X',name:'Reckoning'}],
+  iso:[{key:'Q',name:'Undercut'},{key:'E',name:'Double Tap'},{key:'C',name:'Contingency'},{key:'X',name:'Kill Contract'}],
+  jett:[{key:'Q',name:'Updraft'},{key:'E',name:'Tailwind'},{key:'C',name:'Cloudburst'},{key:'X',name:'Blade Storm'},{key:'P',name:'Drift'}],
+  kayo:[{key:'Q',name:'FLASH/drive'},{key:'E',name:'ZERO/point'},{key:'C',name:'FRAG/ment'},{key:'X',name:'NULL/cmd'}],
+  killjoy:[{key:'Q',name:'ALARMBOT'},{key:'E',name:'TURRET'},{key:'C',name:'Nanoswarm'},{key:'X',name:'Lockdown'}],
+  miks:[{key:'Q',name:'Harmonize'},{key:'E',name:'Waveform'},{key:'C',name:'M-pulse'},{key:'X',name:'Bassquake'}],
+  neon:[{key:'Q',name:'Relay Bolt'},{key:'E',name:'High Gear'},{key:'C',name:'Fast Lane'},{key:'X',name:'Overdrive'}],
+  omen:[{key:'Q',name:'Paranoia'},{key:'E',name:'Dark Cover'},{key:'C',name:'Shrouded Step'},{key:'X',name:'From the Shadows'}],
+  phoenix:[{key:'Q',name:'Hot Hands'},{key:'E',name:'Curveball'},{key:'C',name:'Blaze'},{key:'X',name:'Run it Back'}],
+  raze:[{key:'Q',name:'Blast Pack'},{key:'E',name:'Paint Shells'},{key:'C',name:'Boom Bot'},{key:'X',name:'Showstopper'}],
+  reyna:[{key:'Q',name:'Devour'},{key:'E',name:'Dismiss'},{key:'C',name:'Leer'},{key:'X',name:'Empress'}],
+  sage:[{key:'Q',name:'Slow Orb'},{key:'E',name:'Healing Orb'},{key:'C',name:'Barrier Orb'},{key:'X',name:'Resurrection'}],
+  skye:[{key:'Q',name:'Trailblazer'},{key:'E',name:'Guiding Light'},{key:'C',name:'Regrowth'},{key:'X',name:'Seekers'}],
+  sova:[{key:'Q',name:'Shock Bolt'},{key:'E',name:'Recon Bolt'},{key:'C',name:'Owl Drone'},{key:'X',name:'Hunter\'s Fury'}],
+  tejo:[{key:'Q',name:'Special Delivery'},{key:'E',name:'Guided Salvo'},{key:'C',name:'Stealth Drone'},{key:'X',name:'Armageddon'}],
+  veto:[{key:'Q',name:'Chokehold'},{key:'E',name:'Interceptor'},{key:'C',name:'Crosscut'},{key:'X',name:'Evolution'}],
+  viper:[{key:'Q',name:'Poison Cloud'},{key:'E',name:'Toxic Screen'},{key:'C',name:'Snake Bite'},{key:'X',name:'Viper\'s Pit'}],
+  vyse:[{key:'Q',name:'Shear'},{key:'E',name:'Arc Rose'},{key:'C',name:'Razorvine'},{key:'X',name:'Steel Garden'}],
+  waylay:[{key:'Q',name:'Lightspeed'},{key:'E',name:'Refract'},{key:'C',name:'Saturate'},{key:'X',name:'Convergent Paths'}],
+  yoru:[{key:'Q',name:'BLINDSIDE'},{key:'E',name:'GATECRASH'},{key:'C',name:'FAKEOUT'},{key:'X',name:'DIMENSIONAL DRIFT'}]
+};
 // The panel view and the fullscreen/lightbox view can both be mounted at
 // once, each with its own setupDrawing() instance and its own private
 // renderMarkers() closure over the same shared mapData.agents. Without
@@ -1087,9 +1213,18 @@ var liveDrawRedraws = [];        // one refresh fn per currently-open drawing vi
 function refreshAllLiveDrawing(){ liveDrawRedraws.forEach(function(fn){ fn(); }); }
 var liveIncomingStrokes = [];    // [{clientId,color,width,mode,points}] — other clients' in-progress strokes on THIS map
 var liveIncomingAgentGhosts = []; // [{clientId,agentId,x,y}] — other clients' in-progress drags on THIS map
+var liveIncomingAbilityGhosts = []; // [{clientId,abilityId,x,y}] — other clients' in-progress ability drags on THIS map
 
 function agentImgSrc(id){
   return 'Agents/' + id.charAt(0).toUpperCase() + id.slice(1) + '.png';
+}
+function abilityImgSrc(agentId, key){
+  return 'Abilities/' + agentId.charAt(0).toUpperCase() + agentId.slice(1) + '/' + key + '.png';
+}
+function abilityMeta(agentId, key){
+  var list = AGENT_ABILITIES[agentId] || [];
+  for (var i=0;i<list.length;i++){ if (list[i].key===key) return list[i]; }
+  return {key:key, name:key};
 }
 // Small cache so re-rendering a saved diagram doesn't re-fetch the same
 // agent icon over and over across strats/maps. Never rejects — a failed
@@ -1140,7 +1275,14 @@ function renderSnapshotCanvas(canvas, snapshot, minimapSrc){
     ctx.globalCompositeOperation = 'source-over';
 
     var markers = snapshot.agents || [];
-    Promise.all(markers.map(function(a){ return loadAgentImageEl(agentImgSrc(a.agent)); })).then(function(icons){
+    var abilityMarkers = snapshot.abilities || [];
+    // Both icon sets load in parallel (not one chained after the other) so
+    // adding ability icons never adds serial latency to the agent-only path.
+    Promise.all([
+      Promise.all(markers.map(function(a){ return loadAgentImageEl(agentImgSrc(a.agent)); })),
+      Promise.all(abilityMarkers.map(function(a){ return loadAgentImageEl(abilityImgSrc(a.agent, a.key)); }))
+    ]).then(function(results){
+      var icons = results[0], abIcons = results[1];
       var r = agentMarkerDiameter(w, false) / 2; // same formula as the live on-screen marker
       markers.forEach(function(a, i){
         var icon = icons[i];
@@ -1158,6 +1300,27 @@ function renderSnapshotCanvas(canvas, snapshot, minimapSrc){
         ctx.arc(cx, cy, r, 0, Math.PI*2);
         ctx.lineWidth = Math.max(2, r*0.16);
         ctx.strokeStyle = a.side === 'defense' ? '#0E8F80' : '#E23A49';
+        ctx.stroke();
+      });
+      // Ability icons draw on top of agent markers, smaller and with a
+      // plain neutral ring (they aren't tied to a side the way agents are).
+      var ar = abilityMarkerDiameter(w, false) / 2;
+      abilityMarkers.forEach(function(a, i){
+        var icon = abIcons[i];
+        var cx = a.x*w, cy = a.y*h;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, ar, 0, Math.PI*2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.fillStyle = '#0F1923';
+        ctx.fillRect(cx-ar, cy-ar, ar*2, ar*2);
+        if (icon) ctx.drawImage(icon, cx-ar, cy-ar, ar*2, ar*2);
+        ctx.restore();
+        ctx.beginPath();
+        ctx.arc(cx, cy, ar, 0, Math.PI*2);
+        ctx.lineWidth = Math.max(1.5, ar*0.16);
+        ctx.strokeStyle = '#C7CCD1';
         ctx.stroke();
       });
     });
@@ -1203,6 +1366,12 @@ function agentMarkerDiameter(frameW, coarse){
   var maxD = coarse ? 32 : 28;
   return Math.min(maxD, Math.max(minD, frameW * AGENT_MARKER_RATIO));
 }
+// Ability icons read as sub-markers on top of the map, so they're sized a
+// bit smaller than an agent icon rather than sharing its exact diameter.
+var ABILITY_MARKER_SCALE = 0.72;
+function abilityMarkerDiameter(frameW, coarse){
+  return agentMarkerDiameter(frameW, coarse) * ABILITY_MARKER_SCALE;
+}
 var drawTool = { color: DRAW_COLORS[0], width: 5, mode: 'draw' };
 
 var ICON_ERASER = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M16 3l5 5-9.5 9.5H6L3 14.5 16 3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 21h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
@@ -1226,9 +1395,17 @@ function buildDrawToolbarHTML(){
 
 function buildAgentTrayHTML(){
   var chips = AGENTS.map(function(a){
-    return '<button type="button" class="agent-chip" data-agent="' + a.id + '" title="' + esc(a.name) + '" aria-label="Drag ' + esc(a.name) + ' onto the map">' +
-      '<img src="' + agentImgSrc(a.id) + '" alt="" draggable="false">' +
-    '</button>';
+    var hasAbilities = (AGENT_ABILITIES[a.id] || []).length > 0;
+    return '<div class="agent-chip-wrap">' +
+      '<button type="button" class="agent-chip" data-agent="' + a.id + '" title="' + esc(a.name) + '" aria-label="Drag ' + esc(a.name) + ' onto the map">' +
+        '<img src="' + agentImgSrc(a.id) + '" alt="" draggable="false">' +
+      '</button>' +
+      (hasAbilities ?
+        '<button type="button" class="agent-chip-abilities-toggle" data-agent="' + a.id + '" aria-label="Show ' + esc(a.name) + ' abilities" title="' + esc(a.name) + ' abilities">' +
+          '<svg width="7" height="7" viewBox="0 0 10 10"><circle cx="2" cy="5" r="1.4" fill="currentColor"/><circle cx="5" cy="5" r="1.4" fill="currentColor"/><circle cx="8" cy="5" r="1.4" fill="currentColor"/></svg>' +
+        '</button>'
+      : '') +
+    '</div>';
   }).join('');
   return '' +
     '<div class="agent-tray">' +
@@ -1413,6 +1590,7 @@ function setupDrawing(root){
   toolbar.querySelector('[data-tool="clear"]').addEventListener('click', function(){
     if (mapData && mapData.drawing) mapData.drawing.strokes = [];
     if (mapData) mapData.agents = [];
+    if (mapData) mapData.abilities = [];
     commitDrawChange();
     redraw();
     refreshAllAgentViews();
@@ -1458,6 +1636,11 @@ function setupDrawing(root){
     if (!Array.isArray(mapData.agents)) mapData.agents = [];
     return mapData.agents;
   }
+  function abilitiesList(){
+    if (!mapData) return [];
+    if (!Array.isArray(mapData.abilities)) mapData.abilities = [];
+    return mapData.abilities;
+  }
   function agentMeta(id){
     for (var i=0;i<AGENTS.length;i++){ if (AGENTS[i].id===id) return AGENTS[i]; }
     return {id:id, name:id};
@@ -1466,9 +1649,11 @@ function setupDrawing(root){
 
   function resizeMarkerSizes(){
     var d = agentMarkerDiameter(cssW, isCoarsePointer) + 'px';
+    var ad = abilityMarkerDiameter(cssW, isCoarsePointer) + 'px';
     Array.prototype.forEach.call(agentsLayer.children, function(el){
-      el.style.width = d;
-      el.style.height = d;
+      var size = el.classList.contains('ability-marker') ? ad : d;
+      el.style.width = size;
+      el.style.height = size;
     });
   }
 
@@ -1491,7 +1676,25 @@ function setupDrawing(root){
       agentsLayer.appendChild(el);
       wireMarkerDrag(el, a.id);
     });
+    var ad = abilityMarkerDiameter(cssW, isCoarsePointer) + 'px';
+    abilitiesList().forEach(function(a){
+      var meta = abilityMeta(a.agent, a.key);
+      var el = document.createElement('div');
+      el.className = 'ability-marker';
+      el.style.left = (a.x*100) + '%';
+      el.style.top = (a.y*100) + '%';
+      el.style.width = ad;
+      el.style.height = ad;
+      el.innerHTML =
+        '<img src="' + abilityImgSrc(a.agent, a.key) + '" alt="' + esc(meta.name) + '" draggable="false">' +
+        '<button type="button" class="ability-marker-remove" aria-label="Remove ' + esc(meta.name) + '" title="Remove ' + esc(meta.name) + '">' +
+          '<svg width="8" height="8" viewBox="0 0 10 10"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>' +
+        '</button>';
+      agentsLayer.appendChild(el);
+      wireAbilityMarkerDrag(el, a.id);
+    });
     renderLiveAgentGhosts(); // agentsLayer.innerHTML was just wiped — put them back
+    renderLiveAbilityGhosts();
   }
 
   // Other players' agent markers still mid-drag (not yet released). Drawn
@@ -1523,6 +1726,89 @@ function setupDrawing(root){
     for (var i=0;i<list.length;i++){ if (list[i].id===id){ idx = i; break; } }
     if (idx > -1){ list.splice(idx,1); commitDrawChange(); refreshAllAgentViews(); return true; }
     return false;
+  }
+
+  // Other players' ability markers still mid-drag — same idea as
+  // renderLiveAgentGhosts, kept as its own non-interactive layer so a real
+  // renderMarkers() rebuild doesn't need to know about it.
+  function renderLiveAbilityGhosts(){
+    Array.prototype.slice.call(agentsLayer.querySelectorAll('.ability-live-ghost')).forEach(function(g){ g.remove(); });
+    if (!liveIncomingAbilityGhosts.length) return;
+    var d = abilityMarkerDiameter(cssW, isCoarsePointer) + 'px';
+    liveIncomingAbilityGhosts.forEach(function(g){
+      var rec = abilitiesList().filter(function(a){ return a.id===g.abilityId; })[0];
+      if (!rec) return; // marker not created on our side yet — skip rather than guess its art
+      var meta = abilityMeta(rec.agent, rec.key);
+      var el = document.createElement('div');
+      el.className = 'ability-marker ability-live-ghost';
+      el.style.left = (g.x*100) + '%';
+      el.style.top = (g.y*100) + '%';
+      el.style.width = d;
+      el.style.height = d;
+      el.innerHTML = '<img src="' + abilityImgSrc(rec.agent, rec.key) + '" alt="' + esc(meta.name) + '" draggable="false">';
+      agentsLayer.appendChild(el);
+    });
+  }
+
+  function removeAbilityById(id){
+    var list = abilitiesList();
+    var idx = -1;
+    for (var i=0;i<list.length;i++){ if (list[i].id===id){ idx = i; break; } }
+    if (idx > -1){ list.splice(idx,1); commitDrawChange(); refreshAllAgentViews(); return true; }
+    return false;
+  }
+
+  function wireAbilityMarkerDrag(el, id){
+    var dragging = false;
+    var lastAbilityLiveSendAt = 0;
+    function throttledPushLiveAbilityDrag(pos){
+      var now = Date.now();
+      if (now - lastAbilityLiveSendAt < LIVE_THROTTLE_MS) return;
+      lastAbilityLiveSendAt = now;
+      pushLiveAbilityDrag(id, pos);
+    }
+    function move(e){
+      var rect = frame.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      var overF = overFrame(e);
+      el.classList.toggle('will-delete', !overF);
+      var x = clampPct((e.clientX - rect.left) / rect.width);
+      var y = clampPct((e.clientY - rect.top) / rect.height);
+      var rec = abilitiesList().filter(function(a){ return a.id===id; })[0];
+      if (!rec) return;
+      rec.x = round4(x); rec.y = round4(y);
+      el.style.left = (x*100) + '%';
+      el.style.top = (y*100) + '%';
+      throttledPushLiveAbilityDrag(overF ? {x: rec.x, y: rec.y} : null);
+    }
+    el.addEventListener('pointerdown', function(e){
+      if (e.target.closest('.ability-marker-remove')) return;
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      try { el.setPointerCapture(e.pointerId); } catch(err){}
+      el.classList.add('dragging');
+    });
+    el.addEventListener('pointermove', function(e){ if (dragging) move(e); });
+    function finish(e, allowDelete){
+      if (!dragging) return;
+      dragging = false;
+      el.classList.remove('dragging', 'will-delete');
+      pushLiveAbilityDrag(id, null); // the real position is committed now — clear the live ghost
+      if (allowDelete && e && typeof e.clientX === 'number' && !overFrame(e)){
+        removeAbilityById(id);
+        return;
+      }
+      commitDrawChange();
+      refreshAllAgentViews();
+    }
+    el.addEventListener('pointerup', function(e){ finish(e, true); });
+    el.addEventListener('pointercancel', function(e){ finish(e, false); });
+    el.querySelector('.ability-marker-remove').addEventListener('click', function(e){
+      e.stopPropagation();
+      removeAbilityById(id);
+    });
   }
 
   function wireMarkerDrag(el, id){
@@ -1595,14 +1881,19 @@ function setupDrawing(root){
   function refreshLiveOverlay(){
     redraw();
     renderLiveAgentGhosts();
+    renderLiveAbilityGhosts();
   }
   liveDrawRedraws.push(refreshLiveOverlay);
 
-  // Dragging an agent in from the tray. Built on Pointer Events (not the
-  // HTML5 Drag and Drop API) so it works the same on touch as with a mouse.
+  // Dragging an agent (or an ability, from its hover HUD) in from the tray.
+  // Built on Pointer Events (not the HTML5 Drag and Drop API) so it works
+  // the same on touch as with a mouse. dragKind tells trayEnd which list to
+  // push the new marker onto once it's released over the map.
   var tray = root.querySelector('.agent-tray');
   var ghostEl = null;
   var trayPointerId = null;
+  var dragKind = null;       // 'agent' | 'ability'
+  var dragAbilityKey = null; // set only when dragKind === 'ability'
 
   function removeGhost(){
     if (ghostEl && ghostEl.parentNode) ghostEl.parentNode.removeChild(ghostEl);
@@ -1625,22 +1916,117 @@ function setupDrawing(root){
       var rect = frame.getBoundingClientRect();
       var x = clampPct((e.clientX - rect.left) / rect.width);
       var y = clampPct((e.clientY - rect.top) / rect.height);
-      agentsList().push({id: genId('agent'), agent: ghostEl.getAttribute('data-agent'), side: selectedAgentSide, x: round4(x), y: round4(y)});
+      if (dragKind === 'ability'){
+        abilitiesList().push({id: genId('ability'), agent: ghostEl.getAttribute('data-agent'), key: dragAbilityKey, x: round4(x), y: round4(y)});
+      } else {
+        agentsList().push({id: genId('agent'), agent: ghostEl.getAttribute('data-agent'), side: selectedAgentSide, x: round4(x), y: round4(y)});
+      }
       commitDrawChange();
       refreshAllAgentViews();
     }
     removeGhost();
+    dragKind = null;
+    dragAbilityKey = null;
     window.removeEventListener('pointermove', trayMove);
     window.removeEventListener('pointerup', trayEnd);
     window.removeEventListener('pointercancel', trayEnd);
   }
+
+  // ---- hover-to-reveal ability HUD ----
+  // One shared floating popover per mounted view (panel / lightbox each get
+  // their own), repositioned and repopulated for whichever chip triggered
+  // it. Desktop: mouseenter/mouseleave on the chip itself. Touch: hover
+  // doesn't exist, so a small corner badge on the chip (see CSS) toggles it
+  // instead, without interfering with the chip's own drag-to-place gesture.
+  var abilityHud = null;
+  var hudHideTimer = null;
+  var hudAgentId = null;
+  function ensureAbilityHud(){
+    if (abilityHud) return abilityHud;
+    abilityHud = document.createElement('div');
+    abilityHud.className = 'ability-hud';
+    document.body.appendChild(abilityHud);
+    abilityHud.addEventListener('mouseenter', function(){ clearTimeout(hudHideTimer); });
+    abilityHud.addEventListener('mouseleave', function(){ hideAbilityHudSoon(); });
+    return abilityHud;
+  }
+  function positionAbilityHud(chip){
+    var hud = abilityHud;
+    var r = chip.getBoundingClientRect();
+    var hb = hud.getBoundingClientRect();
+    var cx = r.left + r.width/2;
+    var top = r.top - hb.height - 8;
+    if (top < 4) top = r.bottom + 8;
+    var left = Math.min(Math.max(8, cx - hb.width/2), window.innerWidth - hb.width - 8);
+    hud.style.left = Math.max(4, left) + 'px';
+    hud.style.top = top + 'px';
+  }
+  function wireAbilityHudItems(hud){
+    Array.prototype.forEach.call(hud.querySelectorAll('.ability-hud-item'), function(item){
+      item.addEventListener('pointerdown', function(e){
+        if (e.button !== undefined && e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        clearTimeout(hudHideTimer);
+        trayPointerId = e.pointerId;
+        dragKind = 'ability';
+        var agentId = item.getAttribute('data-agent');
+        dragAbilityKey = item.getAttribute('data-key');
+        ghostEl = document.createElement('div');
+        ghostEl.className = 'ability-drag-ghost';
+        ghostEl.setAttribute('data-agent', agentId);
+        ghostEl.innerHTML = '<img src="' + abilityImgSrc(agentId, dragAbilityKey) + '" alt="">';
+        var gd = abilityMarkerDiameter(cssW, isCoarsePointer);
+        ghostEl.style.width = gd + 'px';
+        ghostEl.style.height = gd + 'px';
+        ghostEl.style.marginLeft = (-gd/2) + 'px';
+        ghostEl.style.marginTop = (-gd/2) + 'px';
+        ghostEl.style.left = e.clientX+'px';
+        ghostEl.style.top = e.clientY+'px';
+        document.body.appendChild(ghostEl);
+        window.addEventListener('pointermove', trayMove);
+        window.addEventListener('pointerup', trayEnd);
+        window.addEventListener('pointercancel', trayEnd);
+        hud.classList.remove('open');
+        hudAgentId = null;
+      });
+    });
+  }
+  function showAbilityHud(chip, agentId){
+    var abilities = AGENT_ABILITIES[agentId] || [];
+    if (!abilities.length) return;
+    clearTimeout(hudHideTimer);
+    var hud = ensureAbilityHud();
+    hudAgentId = agentId;
+    hud.innerHTML = abilities.map(function(ab){
+      return '<button type="button" class="ability-hud-item" data-agent="' + agentId + '" data-key="' + ab.key + '" title="' + esc(ab.name) + '" aria-label="Drag ' + esc(ab.name) + ' onto the map">' +
+        '<img src="' + abilityImgSrc(agentId, ab.key) + '" alt="" draggable="false">' +
+      '</button>';
+    }).join('');
+    hud.classList.add('open');
+    positionAbilityHud(chip);
+    wireAbilityHudItems(hud);
+  }
+  function hideAbilityHudSoon(){
+    clearTimeout(hudHideTimer);
+    hudHideTimer = setTimeout(function(){
+      if (abilityHud) abilityHud.classList.remove('open');
+      hudAgentId = null;
+    }, 180);
+  }
+
   if (tray){
     Array.prototype.forEach.call(tray.querySelectorAll('.agent-chip'), function(chip){
+      var agentId = chip.getAttribute('data-agent');
+      if (!isCoarsePointer){
+        chip.addEventListener('mouseenter', function(){ showAbilityHud(chip, agentId); });
+        chip.addEventListener('mouseleave', function(){ hideAbilityHudSoon(); });
+      }
       chip.addEventListener('pointerdown', function(e){
         if (e.button !== undefined && e.button !== 0) return;
         e.preventDefault();
         trayPointerId = e.pointerId;
-        var agentId = chip.getAttribute('data-agent');
+        dragKind = 'agent';
         ghostEl = document.createElement('div');
         ghostEl.className = 'agent-drag-ghost side-' + selectedAgentSide;
         ghostEl.setAttribute('data-agent', agentId);
@@ -1656,6 +2042,22 @@ function setupDrawing(root){
         window.addEventListener('pointermove', trayMove);
         window.addEventListener('pointerup', trayEnd);
         window.addEventListener('pointercancel', trayEnd);
+      });
+    });
+    // Touch: the corner badge (hidden on fine-pointer devices via CSS)
+    // toggles the same HUD that hover shows on desktop.
+    Array.prototype.forEach.call(tray.querySelectorAll('.agent-chip-abilities-toggle'), function(toggle){
+      var agentId = toggle.getAttribute('data-agent');
+      var chip = toggle.parentNode.querySelector('.agent-chip');
+      toggle.addEventListener('pointerdown', function(e){ e.stopPropagation(); });
+      toggle.addEventListener('click', function(e){
+        e.stopPropagation();
+        if (abilityHud && abilityHud.classList.contains('open') && hudAgentId === agentId){
+          abilityHud.classList.remove('open');
+          hudAgentId = null;
+        } else {
+          showAbilityHud(chip, agentId);
+        }
       });
     });
     Array.prototype.forEach.call(tray.querySelectorAll('.agent-side-btn'), function(btn){
@@ -1678,7 +2080,8 @@ function setupDrawing(root){
   function captureSnapshot(){
     return {
       strokes: JSON.parse(JSON.stringify(strokes())),
-      agents: JSON.parse(JSON.stringify(agentsList()))
+      agents: JSON.parse(JSON.stringify(agentsList())),
+      abilities: JSON.parse(JSON.stringify(abilitiesList()))
     };
   }
 
@@ -1699,6 +2102,9 @@ function setupDrawing(root){
     window.removeEventListener('pointerup', trayEnd);
     window.removeEventListener('pointercancel', trayEnd);
     removeGhost();
+    clearTimeout(hudHideTimer);
+    if (abilityHud && abilityHud.parentNode) abilityHud.parentNode.removeChild(abilityHud);
+    abilityHud = null;
     var ri = agentsRenderers.indexOf(renderMarkers);
     if (ri > -1) agentsRenderers.splice(ri, 1);
     var li = liveDrawRedraws.indexOf(refreshLiveOverlay);
@@ -1729,7 +2135,7 @@ function emptyMapData(mapId){
   // Every category starts empty — the coach adds exactly as many strat
   // slots as they actually want via the "+ Add" card in each category.
   CATEGORIES.forEach(function(c){ categories[c.key] = []; });
-  return {mapId:mapId, categories:categories, drawing:{strokes:[]}, agents:[], updatedAt:null};
+  return {mapId:mapId, categories:categories, drawing:{strokes:[]}, agents:[], abilities:[], updatedAt:null};
 }
 
 function normalizeMapData(mapId, raw){
@@ -1750,7 +2156,7 @@ function normalizeMapData(mapId, raw){
           notes: (e && e.notes) || '',
           image: (e && typeof e.image === 'string' && e.image) ? e.image : null,
           snapshot: (e && e.snapshot && Array.isArray(e.snapshot.strokes) && Array.isArray(e.snapshot.agents)) ?
-            { strokes: e.snapshot.strokes, agents: e.snapshot.agents } : null
+            { strokes: e.snapshot.strokes, agents: e.snapshot.agents, abilities: Array.isArray(e.snapshot.abilities) ? e.snapshot.abilities : [] } : null
         };
       });
     }
@@ -1762,6 +2168,17 @@ function normalizeMapData(mapId, raw){
         id: (a && a.id) || genId('agent'),
         agent: (a && a.agent) || AGENTS[0].id,
         side: (a && a.side === 'defense') ? 'defense' : 'attack',
+        x: (a && typeof a.x === 'number') ? Math.min(1, Math.max(0, a.x)) : 0.5,
+        y: (a && typeof a.y === 'number') ? Math.min(1, Math.max(0, a.y)) : 0.5
+      };
+    });
+  }
+  if (Array.isArray(raw.abilities)){
+    base.abilities = raw.abilities.map(function(a){
+      return {
+        id: (a && a.id) || genId('ability'),
+        agent: (a && a.agent) || AGENTS[0].id,
+        key: (a && a.key) || 'Q',
         x: (a && typeof a.x === 'number') ? Math.min(1, Math.max(0, a.x)) : 0.5,
         y: (a && typeof a.y === 'number') ? Math.min(1, Math.max(0, a.y)) : 0.5
       };
@@ -2094,6 +2511,7 @@ function pushMapToCloud(teamId, mapId, payload){
 function applyIncomingLive(liveForMap){
   var strokesByClient = liveForMap.strokes || {};
   var agentsByClient = liveForMap.agentDrags || {};
+  var abilitiesByClient = liveForMap.abilityDrags || {};
   var strokesOut = [];
   Object.keys(strokesByClient).forEach(function(cid){
     if (cid === CLIENT_ID) return; // ignore our own echo
@@ -2108,16 +2526,25 @@ function applyIncomingLive(liveForMap){
     if (!a) return;
     ghostsOut.push({ clientId: cid, agentId: a.agentId, x: a.x, y: a.y });
   });
+  var abilityGhostsOut = [];
+  Object.keys(abilitiesByClient).forEach(function(cid){
+    if (cid === CLIENT_ID) return;
+    var ab = abilitiesByClient[cid];
+    if (!ab) return;
+    abilityGhostsOut.push({ clientId: cid, abilityId: ab.abilityId, x: ab.x, y: ab.y });
+  });
   liveIncomingStrokes = strokesOut;
   liveIncomingAgentGhosts = ghostsOut;
+  liveIncomingAbilityGhosts = abilityGhostsOut;
   refreshAllLiveDrawing();
 }
 /** Drops any live overlay left over from a map/team we've navigated away
  *  from, so a stale ghost or in-progress stroke can't linger on screen. */
 function clearLiveOverlay(){
-  if (!liveIncomingStrokes.length && !liveIncomingAgentGhosts.length) return;
+  if (!liveIncomingStrokes.length && !liveIncomingAgentGhosts.length && !liveIncomingAbilityGhosts.length) return;
   liveIncomingStrokes = [];
   liveIncomingAgentGhosts = [];
+  liveIncomingAbilityGhosts = [];
   refreshAllLiveDrawing();
 }
 function liveTeamRef(){
@@ -2142,6 +2569,14 @@ function pushLiveAgentDrag(agentId, posOrNull){
   var patch = { live: {} };
   patch.live[t.mapId] = { agentDrags: {} };
   patch.live[t.mapId].agentDrags[CLIENT_ID] = posOrNull ? { agentId: agentId, x: posOrNull.x, y: posOrNull.y } : null;
+  t.ref.set(patch, {merge:true}).catch(function(){});
+}
+function pushLiveAbilityDrag(abilityId, posOrNull){
+  var t = liveTeamRef();
+  if (!t) return;
+  var patch = { live: {} };
+  patch.live[t.mapId] = { abilityDrags: {} };
+  patch.live[t.mapId].abilityDrags[CLIENT_ID] = posOrNull ? { abilityId: abilityId, x: posOrNull.x, y: posOrNull.y } : null;
   t.ref.set(patch, {merge:true}).catch(function(){});
 }
 
@@ -2878,6 +3313,7 @@ function flushSave(){
     categories: mapData.categories,
     drawing: mapData.drawing || {strokes:[]},
     agents: mapData.agents || [],
+    abilities: mapData.abilities || [],
     updatedAt: Date.now()
   };
   dirty = false;
