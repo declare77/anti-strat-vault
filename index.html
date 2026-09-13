@@ -590,7 +590,7 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 .mp-frame.agent-drop-target{outline:2px dashed var(--accent); outline-offset:-2px;}
 .agent-marker{
   position:absolute;
-  width:32px; height:32px;
+  width:19px; height:19px; /* 60% of the original 32px */
   transform:translate(-50%,-50%);
   border-radius:50%;
   overflow:visible;
@@ -616,8 +616,8 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 .agent-marker:hover .agent-marker-remove, .agent-marker:focus-within .agent-marker-remove{opacity:1;}
 .agent-marker-remove:hover{color:var(--accent); border-color:var(--accent);}
 .agent-drag-ghost{
-  position:fixed; z-index:200; width:38px; height:38px;
-  margin-left:-19px; margin-top:-19px;
+  position:fixed; z-index:200; width:23px; height:23px; /* 60% of the original 38px */
+  margin-left:-11.5px; margin-top:-11.5px;
   pointer-events:none;
   border-radius:50%;
 }
@@ -632,7 +632,7 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
 
 @media (pointer:coarse){
   .agent-marker-remove{opacity:.85;}
-  .agent-marker{width:38px; height:38px;}
+  .agent-marker{width:23px; height:23px;} /* 60% of the original 38px */
   /* Hover-to-reveal controls don't work with touch, so keep them
      visible (rather than invisible until an impossible hover) and
      size touch targets closer to the ~40px recommended minimum. */
@@ -1454,7 +1454,7 @@ function setupDrawing(root){
     var markers = agentsList();
     return Promise.all(markers.map(function(a){ return loadAgentImageEl(agentImgSrc(a.agent)); }))
       .then(function(icons){
-        var r = Math.max(16, outW * 0.042);
+        var r = Math.max(10, outW * 0.042 * 0.6); // matches the on-screen marker's 60% size
         markers.forEach(function(a, i){
           var icon = icons[i];
           var cx = a.x*outW, cy = a.y*outH;
