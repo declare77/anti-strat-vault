@@ -607,8 +607,13 @@ h1,h2,h3{font-family:var(--font-display); margin:0; text-wrap:balance;}
   border:2.5px solid var(--accent);
   background:#0F1923;
   box-shadow:0 2px 8px rgba(0,0,0,.5);
+  transition:opacity .1s, filter .1s;
 }
 .agent-marker.side-defense img{border-color:var(--defense);}
+/* Dragged clear of the map — about to be deleted on release, like dragging
+   an icon off the dock. */
+.agent-marker.will-delete img{opacity:.4; filter:grayscale(1); border-color:var(--accent) !important;}
+.agent-marker.will-delete .agent-marker-remove{opacity:1; background:var(--accent); border-color:var(--accent); color:#0F1923;}
 .agent-marker-remove{
   position:absolute; top:-5px; right:-5px; width:15px; height:15px;
   border-radius:50%; background:var(--bg-raised); border:1px solid var(--border-strong);
@@ -1012,6 +1017,18 @@ var AGENTS = [
   {id:'veto', name:'Veto'}, {id:'viper', name:'Viper'}, {id:'vyse', name:'Vyse'},
   {id:'waylay', name:'Waylay'}, {id:'yoru', name:'Yoru'}
 ];
+// The panel view and the fullscreen/lightbox view can both be mounted at
+// once, each with its own setupDrawing() instance and its own private
+// renderMarkers() closure over the same shared mapData.agents. Without
+// this, deleting or moving a marker in one view leaves the other showing
+// stale markers until something else happens to trigger a refresh. Each
+// instance registers its renderMarkers here and every agents-array
+// mutation calls refreshAllAgentViews() so both stay in sync immediately.
+var agentsRenderers = [];
+function refreshAllAgentViews(){
+  agentsRenderers.forEach(function(fn){ fn(); });
+}
+
 function agentImgSrc(id){
   return 'Agents/' + id.charAt(0).toUpperCase() + id.slice(1) + '.png';
 }
@@ -1343,11 +1360,23 @@ function setupDrawing(root){
     });
   }
 
+  function removeAgentById(id){
+    var list = agentsList();
+    var idx = -1;
+    for (var i=0;i<list.length;i++){ if (list[i].id===id){ idx = i; break; } }
+    if (idx > -1){ list.splice(idx,1); commitDrawChange(); refreshAllAgentViews(); return true; }
+    return false;
+  }
+
   function wireMarkerDrag(el, id){
     var dragging = false;
     function move(e){
       var rect = frame.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
+      // Dragged clear of the map — mark it for deletion (like dragging an
+      // icon off the dock) but keep tracking the pointer so letting go
+      // back over the map cancels the delete.
+      el.classList.toggle('will-delete', !overFrame(e));
       var x = clampPct((e.clientX - rect.left) / rect.width);
       var y = clampPct((e.clientY - rect.top) / rect.height);
       var rec = agentsList().filter(function(a){ return a.id===id; })[0];
@@ -1366,24 +1395,30 @@ function setupDrawing(root){
       el.classList.add('dragging');
     });
     el.addEventListener('pointermove', function(e){ if (dragging) move(e); });
-    function finish(){
+    // Releasing outside the map deletes the marker, like throwing it away;
+    // pointercancel (an interrupted gesture, not a deliberate drop) never
+    // deletes — it just leaves the marker at its last position.
+    function finish(e, allowDelete){
       if (!dragging) return;
       dragging = false;
-      el.classList.remove('dragging');
+      el.classList.remove('dragging', 'will-delete');
+      if (allowDelete && e && typeof e.clientX === 'number' && !overFrame(e)){
+        removeAgentById(id);
+        return;
+      }
       commitDrawChange();
+      refreshAllAgentViews();
     }
-    el.addEventListener('pointerup', finish);
-    el.addEventListener('pointercancel', finish);
+    el.addEventListener('pointerup', function(e){ finish(e, true); });
+    el.addEventListener('pointercancel', function(e){ finish(e, false); });
     el.querySelector('.agent-marker-remove').addEventListener('click', function(e){
       e.stopPropagation();
-      var list = agentsList();
-      var idx = -1;
-      for (var i=0;i<list.length;i++){ if (list[i].id===id){ idx = i; break; } }
-      if (idx > -1){ list.splice(idx,1); commitDrawChange(); renderMarkers(); }
+      removeAgentById(id);
     });
   }
 
   renderMarkers();
+  agentsRenderers.push(renderMarkers);
 
   // Dragging an agent in from the tray. Built on Pointer Events (not the
   // HTML5 Drag and Drop API) so it works the same on touch as with a mouse.
@@ -1414,7 +1449,7 @@ function setupDrawing(root){
       var y = clampPct((e.clientY - rect.top) / rect.height);
       agentsList().push({id: genId('agent'), agent: ghostEl.getAttribute('data-agent'), side: selectedAgentSide, x: round4(x), y: round4(y)});
       commitDrawChange();
-      renderMarkers();
+      refreshAllAgentViews();
     }
     removeGhost();
     window.removeEventListener('pointermove', trayMove);
@@ -1543,6 +1578,8 @@ function setupDrawing(root){
     window.removeEventListener('pointerup', trayEnd);
     window.removeEventListener('pointercancel', trayEnd);
     removeGhost();
+    var ri = agentsRenderers.indexOf(renderMarkers);
+    if (ri > -1) agentsRenderers.splice(ri, 1);
   };
 }
 
